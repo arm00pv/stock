@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hot Stocks</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Hot Stock of the Day</h1>
+        <div id="daily-pick">
+            <p>Loading...</p>
+        </div>
+
+        <h2>Historical Picks</h2>
+        <div id="historical-picks">
+            <ul></ul>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/hot-stock')
+                .then(response => response.json())
+                .then(data => {
+                    const dailyPickDiv = document.getElementById('daily-pick');
+                    if (data.ticker) {
+                        dailyPickDiv.innerHTML = `<h2>${data.ticker}</h2>`;
+                    } else {
+                        dailyPickDiv.innerHTML = `<p>No hot stock found today.</p>`;
+                    }
+
+                    const historicalPicksList = document.querySelector('#historical-picks ul');
+                    if (data.history && data.history.length > 0) {
+                        data.history.forEach(pick => {
+                            const li = document.createElement('li');
+                            li.textContent = `${pick.date}: ${pick.ticker}`;
+                            historicalPicksList.appendChild(li);
+                        });
+                    } else {
+                        const li = document.createElement('li');
+                        li.textContent = 'No historical data available.';
+                        historicalPicksList.appendChild(li);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching hot stock:', error);
+                    const dailyPickDiv = document.getElementById('daily-pick');
+                    dailyPickDiv.innerHTML = `<p>Could not load stock data.</p>`;
+                });
+        });
+    </script>
+</body>
+</html>
