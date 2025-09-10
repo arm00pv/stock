@@ -13,12 +13,31 @@ def get_sp500_tickers():
     # In a real-world scenario, you might fetch this list from a reliable source.
     return ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA']
 
+def get_daily_picks():
+    try:
+        with open(DATA_FILE, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
 def find_hot_stock():
+    picks = get_daily_picks()
+    one_year_ago = datetime.now() - timedelta(days=365)
+
+    recent_picks = set()
+    for pick in picks:
+        pick_date = datetime.strptime(pick['date'], '%Y-%m-%d')
+        if pick_date > one_year_ago:
+            recent_picks.add(pick['ticker'])
+
     tickers = get_sp500_tickers()
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
 
     for ticker in tickers:
+        if ticker in recent_picks:
+            continue
+
         stock = yf.Ticker(ticker)
         hist = stock.history(start=start_date, end=end_date)
 
@@ -28,22 +47,17 @@ def find_hot_stock():
         # Check for 3 consecutive days of growth
         positive_days = 0
         for i in range(1, 4):
-            if hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1]:
-                positive_days += 1
-            else:
-                break
+            # Check if there is enough data points
+            if len(hist['Close']) > i+1:
+                if hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1]:
+                    positive_days += 1
+                else:
+                    break
 
         if positive_days >= 3:
             return ticker
 
     return None
-
-def get_daily_picks():
-    try:
-        with open(DATA_FILE, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
 
 def save_daily_pick(ticker):
     picks = get_daily_picks()
@@ -80,6 +94,10 @@ def hot_stock():
         stock_ticker = find_hot_stock()
         if stock_ticker:
             save_daily_pick(stock_ticker)
+
+    # Refresh picks after potential save
+    if not todays_pick and stock_ticker:
+        picks = get_daily_picks()
 
     if stock_ticker:
         return jsonify({
