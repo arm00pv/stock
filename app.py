@@ -3,6 +3,8 @@ import yfinance as yf
 import pandas as pd
 import json
 from datetime import datetime, timedelta
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.exceptions import NotFound
 
 app = Flask(__name__)
 
@@ -110,6 +112,15 @@ def hot_stock():
             'history': picks
         }), 404
 
+# Application factory for Gunicorn
+def create_app():
+    return app
+
+# Add middleware to handle the /stock/ prefix
+application = DispatcherMiddleware(NotFound(), {
+    '/stock': app
+})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    from werkzeug.serving import run_simple
+    run_simple('localhost', 5001, application, use_reloader=True, use_debugger=True)
