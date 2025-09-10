@@ -4,7 +4,10 @@ import pandas as pd
 import json
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
-from database import get_tickers_by_category, add_tickers_to_db, init_db, execute_investment
+from database import (
+    get_tickers_by_category, add_tickers_to_db, init_db, execute_investment,
+    get_portfolio_summary, get_portfolio_holdings
+)
 
 app = Flask(__name__)
 
@@ -291,6 +294,70 @@ def high_yield_dividend_stock():
         return jsonify({'ticker': stock_ticker, 'history': picks})
     else:
         return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
+
+@app.route('/api/portfolio')
+def portfolio_data():
+    try:
+        summary = get_portfolio_summary()
+        holdings_db = get_portfolio_holdings()
+
+        holdings_with_current_value = []
+        total_portfolio_value = 0
+
+        # Create a set of unique tickers to fetch prices efficiently
+        unique_tickers = {h[0] for h in holdings_db}
+
+        # yfinance allows fetching multiple tickers at once
+        if unique_tickers:
+            tickers_data = yf.Tickers(list(unique_tickers))
+
+            # Group holdings by ticker to sum up shares
+            holdings_by_ticker = {}
+            for ticker, shares, purchase_price, purchase_date in holdings_db:
+                if ticker not in holdings_by_ticker:
+                    holdings_by_ticker[ticker] = {'shares': 0, 'total_cost': 0}
+                holdings_by_ticker[ticker]['shares'] += shares
+                holdings_by_ticker[ticker]['total_cost'] += shares * purchase_price
+
+            for ticker_symbol, holding_info in holdings_by_ticker.items():
+                try:
+                    # Access the specific ticker's data
+                    ticker_obj = tickers_data.tickers.get(ticker_symbol.upper())
+                    current_price = ticker_obj.info.get('regularMarketPrice') or ticker_obj.history(period='1d')['Close'].iloc[-1]
+                    current_value = holding_info['shares'] * current_price
+                    total_portfolio_value += current_value
+
+                    holdings_with_current_value.append({
+                        'ticker': ticker_symbol,
+                        'shares': holding_info['shares'],
+                        'average_cost': holding_info['total_cost'] / holding_info['shares'],
+                        'current_price': current_price,
+                        'current_value': current_value
+                    })
+                except Exception as e:
+                    print(f"Could not fetch current price for {ticker_symbol}: {e}")
+                    # If price fetch fails, use last known value (cost basis) for that holding
+                    cost_value = holding_info['total_cost']
+                    total_portfolio_value += cost_value
+                    holdings_with_current_value.append({
+                        'ticker': ticker_symbol,
+                        'shares': holding_info['shares'],
+                        'average_cost': holding_info['total_cost'] / holding_info['shares'],
+                        'current_price': 'N/A',
+                        'current_value': cost_value
+                    })
+
+        return jsonify({
+            'cash_balance': summary[0],
+            'total_invested': summary[1],
+            'holdings_value': total_portfolio_value,
+            'total_portfolio_value': summary[0] + total_portfolio_value, # Cash + Holdings
+            'holdings': holdings_with_current_value
+        })
+
+    except Exception as e:
+        print(f"Error in /api/portfolio: {e}")
+        return jsonify({'error': 'Could not retrieve portfolio data.'}), 500
 
 @app.route('/api/trigger-investment', methods=['POST'])
 def trigger_investment():
