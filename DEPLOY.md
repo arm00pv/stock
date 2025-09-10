@@ -80,10 +80,12 @@ We will use `systemd` to manage the Gunicorn process.
 You will add a proxy configuration to your existing Apache2 site to avoid disrupting your other running applications.
 
 1.  **Enable the required Apache modules:**
+    This is a critical step. The configuration requires the `proxy`, `proxy_http`, and `headers` modules.
     ```bash
     sudo a2enmod proxy proxy_http headers
     sudo systemctl restart apache2
     ```
+    *Note: If you receive an error about `Invalid command 'RequestHeader'`, it means the `headers` module was not enabled. Running the command above will fix this.*
 
 2.  **Edit your existing Apache2 site configuration file:**
     Based on the information you provided, you should edit the following file:
