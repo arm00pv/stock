@@ -3,25 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hot Stocks</title>
+    <title>Stock Picks</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Hot Stock of the Day</h1>
-        <div id="daily-pick">
-            <p>Loading...</p>
+        <div class="tabs">
+            <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
+            <button class="tab-link" onclick="openTab(event, 'PennyStocks')">Penny Stocks</button>
         </div>
 
-        <h2>Historical Picks</h2>
-        <div id="historical-picks">
-            <ul></ul>
+        <div id="HotStocks" class="tab-content" style="display:block;">
+            <h1>Hot Stock of the Day</h1>
+            <div id="hot-daily-pick">
+                <p>Loading...</p>
+            </div>
+            <h2>Historical Picks</h2>
+            <div id="hot-historical-picks">
+                <ul></ul>
+            </div>
+        </div>
+
+        <div id="PennyStocks" class="tab-content">
+            <h1>Hot Penny Stock of the Day</h1>
+            <div id="penny-daily-pick">
+                <p>Loading...</p>
+            </div>
+            <h2>Historical Picks</h2>
+            <div id="penny-historical-picks">
+                <ul></ul>
+            </div>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            fetch("{{ url_for('hot_stock') }}")
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tab-link");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        function populatePicks(endpoint, dailyPickId, historicalPicksId) {
+            const dailyPickDiv = document.getElementById(dailyPickId);
+            const historicalPicksList = document.querySelector(`#${historicalPicksId} ul`);
+
+            fetch(endpoint)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error('Network response was not ok');
@@ -29,14 +63,13 @@
                     return response.json();
                 })
                 .then(data => {
-                    const dailyPickDiv = document.getElementById('daily-pick');
-                    if (data.ticker) {
-                        dailyPickDiv.innerHTML = `<h2>${data.ticker}</h2>`;
+                    if (data.ticker && !data.ticker.startsWith('No')) {
+                        dailyPickDiv.innerHTML = `<h2 class="daily-pick">${data.ticker}</h2>`;
                     } else {
-                        dailyPickDiv.innerHTML = `<p>No hot stock found today.</p>`;
+                        dailyPickDiv.innerHTML = `<p>${data.ticker}</p>`;
                     }
 
-                    const historicalPicksList = document.querySelector('#historical-picks ul');
+                    historicalPicksList.innerHTML = ''; // Clear previous list
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
                             const li = document.createElement('li');
@@ -50,10 +83,15 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching hot stock:', error);
-                    const dailyPickDiv = document.getElementById('daily-pick');
+                    console.error('Error fetching stock data:', error);
                     dailyPickDiv.innerHTML = `<p>Could not load stock data.</p>`;
                 });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Populate both tabs on page load
+            populatePicks("{{ url_for('hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
+            populatePicks("{{ url_for('penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
         });
     </script>
 </body>

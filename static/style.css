@@ -6,7 +6,7 @@ body {
     padding: 20px;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start; /* Align to top */
     min-height: 100vh;
 }
 
@@ -18,24 +18,60 @@ body {
     max-width: 600px;
     width: 100%;
     text-align: center;
+    margin-top: 20px;
 }
 
 h1, h2 {
     color: #0056b3;
 }
 
-#daily-pick h2 {
+/* Tab Styles */
+.tabs {
+    overflow: hidden;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 20px;
+}
+
+.tab-link {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+    font-size: 17px;
+    border-radius: 8px 8px 0 0;
+}
+
+.tab-link:hover {
+    background-color: #ddd;
+}
+
+.tab-link.active {
+    background-color: #0056b3;
+    color: white;
+}
+
+.tab-content {
+    display: none;
+    padding: 6px 12px;
+    border-top: none;
+}
+
+/* Content Styles */
+.daily-pick h2 {
     font-size: 2.5em;
     color: #28a745;
     margin: 10px 0;
 }
 
-#historical-picks ul {
+.historical-picks ul {
     list-style-type: none;
     padding: 0;
 }
 
-#historical-picks li {
+.historical-picks li {
     background: #e9ecef;
     margin-bottom: 8px;
     padding: 10px;
