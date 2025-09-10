@@ -8,6 +8,9 @@
 </head>
 <body>
     <div class="container">
+        <div id="timer-container">
+            Next pick in: <span id="countdown"></span>
+        </div>
         <div class="tabs">
             <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
             <button class="tab-link" onclick="openTab(event, 'PennyStocks')">Penny Stocks</button>
@@ -88,7 +91,7 @@
                 })
                 .then(data => {
                     if (data.ticker && !data.ticker.startsWith('No')) {
-                        dailyPickDiv.innerHTML = `<h2 class="daily-pick">${data.ticker}</h2>`;
+                        dailyPickDiv.innerHTML = `<h2><a href="https://finance.yahoo.com/quote/${data.ticker}" target="_blank" class="ticker-link">${data.ticker}</a></h2>`;
                     } else {
                         dailyPickDiv.innerHTML = `<p>${data.ticker}</p>`;
                     }
@@ -97,7 +100,8 @@
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
                             const li = document.createElement('li');
-                            li.textContent = `${pick.date}: ${pick.ticker}`;
+                            const tickerLink = `<a href="https://finance.yahoo.com/quote/${pick.ticker}" target="_blank" class="ticker-link">${pick.ticker}</a>`;
+                            li.innerHTML = `${pick.date}: ${tickerLink}`;
                             historicalPicksList.appendChild(li);
                         });
                     } else {
@@ -112,7 +116,45 @@
                 });
         }
 
+        function startCountdown() {
+            const countdownElement = document.getElementById('countdown');
+
+            function updateTimer() {
+                // Get current time in UTC
+                const now = new Date();
+
+                // Calculate New York time (UTC-4 during EDT, UTC-5 during EST)
+                // This is a simplification. A robust solution would use a library for timezones.
+                // For now, we'll assume EDT (UTC-4) for simplicity as it covers most of the year.
+                const nowUtc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const nowNewYork = new Date(nowUtc - (3600000 * 4));
+
+                // Set target time to 8:00 AM NY time
+                let target = new Date(nowNewYork);
+                target.setHours(8, 0, 0, 0);
+
+                // If it's already past 8:00 AM, set the target for tomorrow
+                if (nowNewYork.getTime() > target.getTime()) {
+                    target.setDate(target.getDate() + 1);
+                }
+
+                const diff = target - nowNewYork;
+
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                countdownElement.textContent = `${hours}h ${minutes}m ${seconds}s`;
+            }
+
+            setInterval(updateTimer, 1000);
+            updateTimer(); // Initial call
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            // Start the countdown timer
+            startCountdown();
+
             // Populate all tabs on page load
             populatePicks("{{ url_for('hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
             populatePicks("{{ url_for('penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');

@@ -135,3 +135,45 @@ You should now be able to access your application in your web browser at:
 If you encounter any issues, you can check the logs for Apache2 and your application:
 -   **Apache2 logs:** `sudo journalctl -u apache2` or check `/var/log/apache2/error.log`
 -   **Application logs:** `sudo journalctl -u hotstocks`
+
+---
+
+## Step 6 (Optional): Automate Data Scraping
+
+To keep the stock lists fresh, you can automate the `scraper.py` script to run daily using a cron job.
+
+### Setting the Correct Timezone
+
+A common issue with cron jobs is that they run based on the server's system time, which is often UTC. To run a job at a specific time in a specific timezone (like 8:00 AM in New York), you must specify that timezone.
+
+The recommended way to do this is to add the `CRON_TZ` variable to the top of your crontab file. This sets the timezone for all subsequent jobs in that file.
+
+### Instructions
+
+1.  **Open the crontab editor for the `www-data` user.** It's important to run the cron job as the `www-data` user, as that user owns the project directory and database file.
+    ```bash
+    sudo crontab -u www-data -e
+    ```
+
+2.  **Add the timezone and cron job lines.** Paste the following two lines at the top of the file. This will run the scraper every day at 8:00 AM America/New_York time.
+
+    ```cron
+    # Set the timezone for all cron jobs in this file
+    CRON_TZ=America/New_York
+
+    # Run the stock scraper every day at 8:00 AM
+    0 8 * * * /usr/bin/bash -c 'cd /var/www/webhost/stock && source venv/bin/activate && python scraper.py >> /var/log/stock_scraper.log 2>&1'
+    ```
+
+### Cron Job Breakdown:
+-   `CRON_TZ=America/New_York`: This ensures the schedule `0 8 * * *` is interpreted as 8:00 AM in the New York timezone.
+-   `0 8 * * *`: This means "at minute 0 of hour 8 on every day-of-month, every month, and every day-of-week."
+-   `/usr/bin/bash -c '...'`: Runs the command in a bash shell, which is necessary to handle the `cd` and `source` commands.
+-   `cd ... && source ... && python ...`: This chain of commands ensures the script runs in the correct directory with the correct Python environment.
+-   `>> /var/log/stock_scraper.log 2>&1`: This is crucial for logging. It appends all output and errors to a log file, so you can check if the scraper ran successfully.
+
+3.  **Create and permission the log file.** You must create the log file and give the `www-data` user permission to write to it.
+    ```bash
+    sudo touch /var/log/stock_scraper.log
+    sudo chown www-data:www-data /var/log/stock_scraper.log
+    ```
