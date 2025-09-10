@@ -11,26 +11,50 @@
         <div class="tabs">
             <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
             <button class="tab-link" onclick="openTab(event, 'PennyStocks')">Penny Stocks</button>
+            <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')">Monthly Dividend</button>
+            <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
         </div>
 
         <div id="HotStocks" class="tab-content" style="display:block;">
             <h1>Hot Stock of the Day</h1>
-            <div id="hot-daily-pick">
+            <div id="hot-daily-pick" class="daily-pick-container">
                 <p>Loading...</p>
             </div>
             <h2>Historical Picks</h2>
-            <div id="hot-historical-picks">
+            <div id="hot-historical-picks" class="historical-picks-container">
                 <ul></ul>
             </div>
         </div>
 
         <div id="PennyStocks" class="tab-content">
             <h1>Hot Penny Stock of the Day</h1>
-            <div id="penny-daily-pick">
+            <div id="penny-daily-pick" class="daily-pick-container">
                 <p>Loading...</p>
             </div>
             <h2>Historical Picks</h2>
-            <div id="penny-historical-picks">
+            <div id="penny-historical-picks" class="historical-picks-container">
+                <ul></ul>
+            </div>
+        </div>
+
+        <div id="MonthlyDividend" class="tab-content">
+            <h1>Monthly Dividend Pick of the Day</h1>
+            <div id="monthly-daily-pick" class="daily-pick-container">
+                <p>Loading...</p>
+            </div>
+            <h2>Historical Picks</h2>
+            <div id="monthly-historical-picks" class="historical-picks-container">
+                <ul></ul>
+            </div>
+        </div>
+
+        <div id="HighYield" class="tab-content">
+            <h1>High Yield Pick of the Day</h1>
+            <div id="high-yield-daily-pick" class="daily-pick-container">
+                <p>Loading...</p>
+            </div>
+            <h2>Historical Picks</h2>
+            <div id="high-yield-historical-picks" class="historical-picks-container">
                 <ul></ul>
             </div>
         </div>
@@ -89,9 +113,11 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Populate both tabs on page load
+            // Populate all tabs on page load
             populatePicks("{{ url_for('hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
             populatePicks("{{ url_for('penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
+            populatePicks("{{ url_for('monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
+            populatePicks("{{ url_for('high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
         });
     </script>
 </body>

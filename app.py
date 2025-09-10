@@ -13,6 +13,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
 DATA_FILE = 'data/daily_picks.json'
 PENNY_DATA_FILE = 'data/penny_picks.json'
+MONTHLY_DIVIDEND_DATA_FILE = 'data/monthly_dividend_picks.json'
+HIGH_YIELD_DATA_FILE = 'data/high_yield_picks.json'
+
 
 # --- Ticker Functions ---
 def get_sp500_tickers():
@@ -20,8 +23,16 @@ def get_sp500_tickers():
     return ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA']
 
 def get_penny_stock_tickers():
-    # A sample list of penny stocks. Finding a reliable, real-time source is a potential future improvement.
+    # A sample list of penny stocks.
     return ['SNDL', 'NAKD', 'CTRM', 'ZOM', 'TXMD', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK']
+
+def get_monthly_dividend_tickers():
+    # A sample list of stocks/ETFs known for paying monthly dividends.
+    return ['O', 'MAIN', 'STAG', 'GAIN', 'GOOD', 'PBA', 'SBR', 'AGNC', 'LTC', 'ADC']
+
+def get_high_yield_tickers():
+    # A sample list of stocks/ETFs known for high dividend yields.
+    return ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
 
 # --- Generic Data Handling Functions ---
 def get_picks_from_file(filename):
@@ -173,6 +184,70 @@ def penny_stock():
         return jsonify({'ticker': stock_ticker, 'history': picks})
     else:
         return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks})
+
+# --- Dividend Stock Logic ---
+def find_dividend_stock(filename, ticker_function):
+    """A generic function to find a stock from a list that hasn't been picked recently."""
+    picks = get_picks_from_file(filename)
+    one_year_ago = datetime.now() - timedelta(days=365)
+
+    recent_picks = set()
+    for pick in picks:
+        pick_date = datetime.strptime(pick['date'], '%Y-%m-%d')
+        if pick_date > one_year_ago:
+            recent_picks.add(pick['ticker'])
+
+    tickers = ticker_function()
+
+    for ticker in tickers:
+        if ticker not in recent_picks:
+            # For dividend stocks, we just need one that hasn't been picked.
+            # A more complex algorithm could be added later if needed.
+            return ticker
+
+    # If all have been picked recently, just return the first one from the list.
+    return tickers[0] if tickers else None
+
+# --- API Endpoints ---
+@app.route('/api/monthly-dividend')
+def monthly_dividend_stock():
+    picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+
+    if todays_pick:
+        stock_ticker = todays_pick['ticker']
+    else:
+        stock_ticker = find_dividend_stock(MONTHLY_DIVIDEND_DATA_FILE, get_monthly_dividend_tickers)
+        if stock_ticker:
+            save_pick_to_file(stock_ticker, MONTHLY_DIVIDEND_DATA_FILE)
+            picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
+
+    if stock_ticker:
+        return jsonify({'ticker': stock_ticker, 'history': picks})
+    else:
+        return jsonify({'ticker': 'No monthly dividend stock found today.', 'history': picks})
+
+@app.route('/api/high-yield-dividend')
+def high_yield_dividend_stock():
+    picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+
+    if todays_pick:
+        stock_ticker = todays_pick['ticker']
+    else:
+        stock_ticker = find_dividend_stock(HIGH_YIELD_DATA_FILE, get_high_yield_tickers)
+        if stock_ticker:
+            save_pick_to_file(stock_ticker, HIGH_YIELD_DATA_FILE)
+            picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
+
+    if stock_ticker:
+        return jsonify({'ticker': stock_ticker, 'history': picks})
+    else:
+        return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
