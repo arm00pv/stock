@@ -154,6 +154,7 @@ The recommended way to do this is to add the `CRON_TZ` variable to the top of yo
     ```bash
     sudo crontab -u www-data -e
     ```
+    *Note: If this is the first time you are running `crontab` for this user, you will be prompted to select a text editor. Choose option `1` for `nano`, as it is the easiest to use.*
 
 2.  **Add the timezone and cron job lines.** Paste the following two lines at the top of the file. This will run the scraper every day at 8:00 AM America/New_York time.
 
