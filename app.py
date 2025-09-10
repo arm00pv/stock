@@ -4,6 +4,7 @@ import pandas as pd
 import json
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
+from database import get_tickers_by_category, add_tickers_to_db, init_db
 
 app = Flask(__name__)
 
@@ -17,22 +18,29 @@ MONTHLY_DIVIDEND_DATA_FILE = 'data/monthly_dividend_picks.json'
 HIGH_YIELD_DATA_FILE = 'data/high_yield_picks.json'
 
 
-# --- Ticker Functions ---
-def get_sp500_tickers():
-    # For demonstration purposes, using a small list of tickers.
-    return ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA']
+# --- Ticker Data Source ---
+# The get_tickers_by_category function from database.py is now the source of truth.
+# The hardcoded lists below are used only for the one-time initial population of the database.
 
-def get_penny_stock_tickers():
-    # A sample list of penny stocks.
-    return ['SNDL', 'NAKD', 'CTRM', 'ZOM', 'TXMD', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK']
-
-def get_monthly_dividend_tickers():
-    # A sample list of stocks/ETFs known for paying monthly dividends.
-    return ['O', 'MAIN', 'STAG', 'GAIN', 'GOOD', 'PBA', 'SBR', 'AGNC', 'LTC', 'ADC']
-
-def get_high_yield_tickers():
-    # A sample list of stocks/ETFs known for high dividend yields.
-    return ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
+def initial_populate_db():
+    """
+    Populates the database with initial hardcoded lists if they don't exist.
+    This ensures the app works out-of-the-box before the scraper is run.
+    """
+    print("Checking if initial data population is needed...")
+    # S&P 500
+    if not get_tickers_by_category('sp500'):
+        sp500_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA']
+        add_tickers_to_db(sp500_tickers, 'sp500')
+    # Penny Stocks
+    if not get_tickers_by_category('penny'):
+        penny_tickers = ['SNDL', 'NAKD', 'CTRM', 'ZOM', 'TXMD', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK']
+        add_tickers_to_db(penny_tickers, 'penny')
+    # High Yield
+    if not get_tickers_by_category('high_yield'):
+        high_yield_tickers = ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
+        add_tickers_to_db(high_yield_tickers, 'high_yield')
+    # The 'monthly_dividend' category is intentionally left to be populated by the scraper.
 
 # --- Generic Data Handling Functions ---
 def get_picks_from_file(filename):
@@ -66,7 +74,7 @@ def find_hot_stock():
         if pick_date > one_year_ago:
             recent_picks.add(pick['ticker'])
 
-    tickers = get_sp500_tickers()
+    tickers = get_tickers_by_category('sp500')
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
 
@@ -106,7 +114,7 @@ def find_hot_penny_stock():
         if pick_date > one_year_ago:
             recent_picks.add(pick['ticker'])
 
-    tickers = get_penny_stock_tickers()
+    tickers = get_tickers_by_category('penny')
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
 
@@ -186,7 +194,7 @@ def penny_stock():
         return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks})
 
 # --- Dividend Stock Logic ---
-def find_dividend_stock(filename, ticker_function):
+def find_dividend_stock(filename, category):
     """A generic function to find a stock from a list that hasn't been picked recently."""
     picks = get_picks_from_file(filename)
     one_year_ago = datetime.now() - timedelta(days=365)
@@ -197,7 +205,7 @@ def find_dividend_stock(filename, ticker_function):
         if pick_date > one_year_ago:
             recent_picks.add(pick['ticker'])
 
-    tickers = ticker_function()
+    tickers = get_tickers_by_category(category)
 
     for ticker in tickers:
         if ticker not in recent_picks:
@@ -219,7 +227,7 @@ def monthly_dividend_stock():
     if todays_pick:
         stock_ticker = todays_pick['ticker']
     else:
-        stock_ticker = find_dividend_stock(MONTHLY_DIVIDEND_DATA_FILE, get_monthly_dividend_tickers)
+        stock_ticker = find_dividend_stock(MONTHLY_DIVIDEND_DATA_FILE, 'monthly_dividend')
         if stock_ticker:
             save_pick_to_file(stock_ticker, MONTHLY_DIVIDEND_DATA_FILE)
             picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
@@ -239,7 +247,7 @@ def high_yield_dividend_stock():
     if todays_pick:
         stock_ticker = todays_pick['ticker']
     else:
-        stock_ticker = find_dividend_stock(HIGH_YIELD_DATA_FILE, get_high_yield_tickers)
+        stock_ticker = find_dividend_stock(HIGH_YIELD_DATA_FILE, 'high_yield')
         if stock_ticker:
             save_pick_to_file(stock_ticker, HIGH_YIELD_DATA_FILE)
             picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
@@ -250,4 +258,6 @@ def high_yield_dividend_stock():
         return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
 
 if __name__ == '__main__':
+    init_db()
+    initial_populate_db()
     app.run(debug=True, port=5001)

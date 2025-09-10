@@ -67,10 +67,17 @@ def scrape_monthly_dividend_stocks():
 
     return sorted(list(all_tickers))
 
+from database import init_db, add_tickers_to_db
+
 if __name__ == '__main__':
+    # Initialize the database and table first
+    init_db()
+
+    print("Scraping monthly dividend stocks...")
     scraped_tickers = scrape_monthly_dividend_stocks()
+
     if scraped_tickers:
-        print("Scraped Monthly Dividend Stock Tickers:")
-        print(str(scraped_tickers))
+        print(f"Found {len(scraped_tickers)} tickers.")
+        add_tickers_to_db(scraped_tickers, 'monthly_dividend')
     else:
         print("Could not scrape any tickers.")
