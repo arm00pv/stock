@@ -22,19 +22,28 @@ The application files will be located in `/var/www/webhost/stock/`.
 2.  **Create the directory and clone the repository:**
     ```bash
     sudo mkdir -p /var/www/webhost/stock
-    sudo chown -R $USER:$USER /var/www/webhost/stock
     git clone <your-repo-url> /var/www/webhost/stock
-    cd /var/www/webhost/stock
     ```
 
-3.  **Create a Python virtual environment and install dependencies:**
+3.  **Set Directory Permissions:**
+    This is a crucial step. The Gunicorn process runs as the `www-data` user, so this user needs to own the application files to be able to create the socket file.
+    ```bash
+    sudo chown -R www-data:www-data /var/www/webhost/stock
+    ```
+
+4.  **Set up Python Environment:**
+    Change into the project directory:
+    ```bash
+    cd /var/www/webhost/stock
+    ```
+    Create a Python virtual environment and install dependencies:
     ```bash
     python3 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
     pip install gunicorn
     ```
-    *Note: Remember to activate the virtual environment (`source venv/bin/activate`) whenever you work in the project directory.*
+    *Note: Remember to activate the virtual environment (`source venv/bin/activate`) whenever you work in the project directory. You may need to use `sudo -E` to preserve the environment when running commands as root.*
 
 ## Step 2: Configure Gunicorn
 
@@ -45,7 +54,7 @@ We will use `systemd` to manage the Gunicorn process.
     sudo nano /etc/systemd/system/hotstocks.service
     ```
 
-2.  **Add the following content to the file.** This configuration tells `systemd` how to run our application. It will be run by the `www-data` user and group, which is the same user Apache runs as.
+2.  **Add the following content to the file.**
 
     ```ini
     [Unit]
@@ -65,7 +74,7 @@ We will use `systemd` to manage the Gunicorn process.
 
 3.  **Create a `wsgi.py` file** in the root of your project directory (`/var/www/webhost/stock/`):
     ```bash
-    nano wsgi.py
+    sudo nano wsgi.py # Use sudo as the directory is now owned by www-data
     ```
     Add the following content:
     ```python
