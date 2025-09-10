@@ -39,19 +39,27 @@ For instructions on how to deploy this application to a production server using 
 
 This project includes a standalone script, `scraper.py`, designed to build lists of stocks for different categories by scraping financial websites.
 
-### Purpose
+### Data Management
 
-The main application relies on curated lists of tickers for categories like "Monthly Dividends". The scraper is a proof-of-concept tool to automate the creation of these lists. The current version is designed to extract a list of monthly dividend stocks from an article on `simplysafedividends.com`.
+The application's stock lists are managed via an SQLite database (`stocks.db`). This database is the central source of truth for the ticker lists used in each category.
+
+The database is populated in two ways:
+1.  **Initial Seeding**: When `app.py` is run for the first time, it will create the database and seed it with starter lists for the "Hot Stocks", "Penny Stocks", and "High Yield Dividends" categories.
+2.  **Web Scraping**: The `scraper.py` script is designed to dynamically update the database with fresh ticker lists from online sources.
 
 ### Running the Scraper
 
-1.  **Install Dependencies**: The scraper requires `requests` and `beautifulsoup4`, which are included in the main `requirements.txt` file. Make sure you have run `pip install -r requirements.txt`.
+The scraper script (`scraper.py`) currently supports fetching tickers for the **Monthly Dividend Stocks** category.
 
-2.  **Run the Script**: Execute the script from your terminal:
+1.  **Install Dependencies**: Ensure you have installed the required packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2.  **Run the Script**: Execute the script from your terminal to update the database:
     ```bash
     python scraper.py
     ```
-
-3.  **Output**: The script will print a Python list of the scraped ticker symbols to your console. This list can then be copied and used to update the ticker lists in `app.py` (e.g., the `get_monthly_dividend_tickers` function).
+    This will find and save the latest monthly dividend tickers to the `stocks.db` file. You can run this periodically to keep the list fresh.
 
 **Note**: Web scraping can be fragile and may break if the source website changes its layout. This script is intended as a starting point for building a more robust data collection system.
