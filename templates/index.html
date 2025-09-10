@@ -21,8 +21,13 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            fetch('/api/hot-stock')
-                .then(response => response.json())
+            fetch("{{ url_for('hot_stock') }}")
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     const dailyPickDiv = document.getElementById('daily-pick');
                     if (data.ticker) {
