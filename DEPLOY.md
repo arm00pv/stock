@@ -2,14 +2,14 @@
 
 This guide provides step-by-step instructions for deploying the Hot Stocks Flask application on a Digital Ocean server running Ubuntu. The application will be served using **Apache2** as a reverse proxy and Gunicorn as the WSGI server.
 
-The application will be accessible at `http://zapp.sytes.net/stock/`.
+The application will be accessible at `https://zapp.sytes.net/stock/`.
 The application files will be located in `/var/www/webhost/stock/`.
 
 ## Prerequisites
 
 - A Digital Ocean Droplet with Ubuntu 20.04 or later.
 - A non-root user with `sudo` privileges.
-- **Apache2** installed (`sudo apt update && sudo apt install apache2`).
+- **Apache2** installed and running.
 - Python 3 and `pip` installed.
 
 ## Step 1: Clone the Repository and Set Up the Environment
@@ -21,8 +21,8 @@ The application files will be located in `/var/www/webhost/stock/`.
 
 2.  **Create the directory and clone the repository:**
     ```bash
-    sudo mkdir -p /var/www/webhost
-    sudo chown -R $USER:$USER /var/www/webhost
+    sudo mkdir -p /var/www/webhost/stock
+    sudo chown -R $USER:$USER /var/www/webhost/stock
     git clone <your-repo-url> /var/www/webhost/stock
     cd /var/www/webhost/stock
     ```
@@ -38,7 +38,7 @@ The application files will be located in `/var/www/webhost/stock/`.
 
 ## Step 2: Configure Gunicorn
 
-We will use `systemd` to manage the Gunicorn process. This part remains the same as with Nginx.
+We will use `systemd` to manage the Gunicorn process.
 
 1.  **Create a `systemd` service file:**
     ```bash
@@ -77,7 +77,7 @@ We will use `systemd` to manage the Gunicorn process. This part remains the same
 
 ## Step 3: Configure Apache2
 
-Apache2 will act as a reverse proxy, forwarding requests to Gunicorn.
+You will add a proxy configuration to your existing Apache2 site to avoid disrupting your other running applications.
 
 1.  **Enable the required Apache modules:**
     ```bash
@@ -85,36 +85,22 @@ Apache2 will act as a reverse proxy, forwarding requests to Gunicorn.
     sudo systemctl restart apache2
     ```
 
-2.  **Create an Apache2 Virtual Host configuration file:**
+2.  **Edit your existing Apache2 site configuration file:**
+    Based on the information you provided, you should edit the following file:
     ```bash
-    sudo nano /etc/apache2/sites-available/hotstocks.conf
+    sudo nano /etc/apache2/sites-enabled/webhost-le-ssl.conf
     ```
 
-3.  **Add the following `VirtualHost` block.** This configures Apache2 to listen on port 80 and handle requests for `zapp.sytes.net`.
+3.  **Add the proxy directives.** Inside the `<VirtualHost *:443>` block, add the following lines. A good place is near your other `ProxyPass` directives to keep things organized.
 
     ```apache
-    <VirtualHost *:80>
-        ServerName zapp.sytes.net
-
-        ProxyPreserveHost On
-        ProxyRequests Off
-
-        # The ProxyPass directive is the key part. The trailing slash on the URL is important.
-        # It tells Apache to pass requests for /stock/ to the Gunicorn socket.
-        ProxyPass /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
-        ProxyPassReverse /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
-
-        # We need to set the SCRIPT_NAME header so the app knows it's at /stock
-        RequestHeader set SCRIPT_NAME /stock
-    </VirtualHost>
+    # --- Configuration for Hot Stocks App ---
+    ProxyPass /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
+    ProxyPassReverse /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
+    RequestHeader set SCRIPT_NAME /stock
     ```
 
-4.  **Enable the site:**
-    ```bash
-    sudo a2ensite hotstocks.conf
-    ```
-
-5.  **Test the Apache2 configuration for syntax errors:**
+4.  **Test the Apache2 configuration for syntax errors:**
     ```bash
     sudo apache2ctl configtest
     ```
@@ -142,7 +128,7 @@ Apache2 will act as a reverse proxy, forwarding requests to Gunicorn.
 ## Step 5: Access Your Application
 
 You should now be able to access your application in your web browser at:
-`http://zapp.sytes.net/stock/`
+`https://zapp.sytes.net/stock/`
 
 If you encounter any issues, you can check the logs for Apache2 and your application:
 -   **Apache2 logs:** `sudo journalctl -u apache2` or check `/var/log/apache2/error.log`
