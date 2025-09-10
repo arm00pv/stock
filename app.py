@@ -152,7 +152,7 @@ def hot_stock():
     if stock_ticker:
         return jsonify({'ticker': stock_ticker, 'history': picks})
     else:
-        return jsonify({'ticker': 'No hot stock found today.', 'history': picks}), 404
+        return jsonify({'ticker': 'No hot stock found today.', 'history': picks})
 
 @app.route('/api/penny-stock')
 def penny_stock():
@@ -172,7 +172,7 @@ def penny_stock():
     if stock_ticker:
         return jsonify({'ticker': stock_ticker, 'history': picks})
     else:
-        return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks}), 404
+        return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
