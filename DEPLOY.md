@@ -26,7 +26,7 @@ The application files will be located in `/var/www/webhost/stock/`.
     ```
 
 3.  **Set Directory Permissions:**
-    This is a crucial step. The Gunicorn process runs as the `www-data` user, so this user needs to own the application files to be able to create the socket file.
+    This is a crucial step. The Gunicorn process runs as the `www-data` user, so this user needs to own the application files.
     ```bash
     sudo chown -R www-data:www-data /var/www/webhost/stock
     ```
@@ -43,7 +43,6 @@ The application files will be located in `/var/www/webhost/stock/`.
     pip install -r requirements.txt
     pip install gunicorn
     ```
-    *Note: Remember to activate the virtual environment (`source venv/bin/activate`) whenever you work in the project directory. You may need to use `sudo -E` to preserve the environment when running commands as root.*
 
 ## Step 2: Configure Gunicorn
 
@@ -72,21 +71,20 @@ We will use `systemd` to manage the Gunicorn process.
     WantedBy=multi-user.target
     ```
 
-3.  **Create a `wsgi.py` file** in the root of your project directory (`/var/www/webhost/stock/`):
+3.  **Create a `wsgi.py` file** for Gunicorn to use:
     ```bash
     sudo nano wsgi.py # Use sudo as the directory is now owned by www-data
     ```
-    Add the following content:
+    Add the following content. This imports the Flask `app` object from your `app.py` file and assigns it to a variable named `application`, which Gunicorn expects.
     ```python
-    from app import application
+    from app import app
 
-    if __name__ == "__main__":
-        application.run()
+    application = app
     ```
 
 ## Step 3: Configure Apache2
 
-You will add a proxy configuration to your existing Apache2 site to avoid disrupting your other running applications.
+You will add a proxy configuration to your existing Apache2 site.
 
 1.  **Enable the required Apache modules:**
     This is a critical step. The configuration requires the `proxy`, `proxy_http`, and `headers` modules.
@@ -94,22 +92,21 @@ You will add a proxy configuration to your existing Apache2 site to avoid disrup
     sudo a2enmod proxy proxy_http headers
     sudo systemctl restart apache2
     ```
-    *Note: If you receive an error about `Invalid command 'RequestHeader'`, it means the `headers` module was not enabled. Running the command above will fix this.*
 
 2.  **Edit your existing Apache2 site configuration file:**
-    Based on the information you provided, you should edit the following file:
     ```bash
     sudo nano /etc/apache2/sites-enabled/webhost-le-ssl.conf
     ```
 
-3.  **Add the proxy directives.** Inside the `<VirtualHost *:443>` block, add the following lines. A good place is near your other `ProxyPass` directives to keep things organized.
+3.  **Add the proxy directives.** Inside the `<VirtualHost *:443>` block, add the following lines.
 
     ```apache
     # --- Configuration for Hot Stocks App ---
     ProxyPass /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
     ProxyPassReverse /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
-    RequestHeader set SCRIPT_NAME /stock
+    RequestHeader set X-Forwarded-Prefix /stock
     ```
+    *Note: We are now using `X-Forwarded-Prefix`. This header works with the `ProxyFix` middleware in the Flask app to correctly handle the `/stock/` URL prefix.*
 
 4.  **Test the Apache2 configuration for syntax errors:**
     ```bash
@@ -129,12 +126,6 @@ You will add a proxy configuration to your existing Apache2 site to avoid disrup
     ```bash
     sudo systemctl restart apache2
     ```
-
-3.  **Check the status of the `hotstocks` service:**
-    ```bash
-    sudo systemctl status hotstocks
-    ```
-    You should see that it is `active (running)`.
 
 ## Step 5: Access Your Application
 

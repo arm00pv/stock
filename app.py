@@ -3,10 +3,13 @@ import yfinance as yf
 import pandas as pd
 import json
 from datetime import datetime, timedelta
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.exceptions import NotFound
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+
+# Apply the ProxyFix middleware to handle the X-Forwarded-Prefix header
+# This is crucial for running the app in a subdirectory behind a reverse proxy.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
 DATA_FILE = 'data/daily_picks.json'
 
@@ -112,15 +115,5 @@ def hot_stock():
             'history': picks
         }), 404
 
-# Application factory for Gunicorn
-def create_app():
-    return app
-
-# Add middleware to handle the /stock/ prefix
-application = DispatcherMiddleware(NotFound(), {
-    '/stock': app
-})
-
 if __name__ == '__main__':
-    from werkzeug.serving import run_simple
-    run_simple('localhost', 5001, application, use_reloader=True, use_debugger=True)
+    app.run(debug=True, port=5001)
