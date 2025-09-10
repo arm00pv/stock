@@ -20,6 +20,30 @@ def init_db():
         )
     ''')
 
+    # --- New Portfolio Tables ---
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS portfolio_summary (
+            id INTEGER PRIMARY KEY,
+            cash_balance REAL NOT NULL,
+            total_invested REAL NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS portfolio_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            shares REAL NOT NULL,
+            purchase_price REAL NOT NULL,
+            purchase_date TEXT NOT NULL
+        )
+    ''')
+
+    # Initialize summary if it's empty
+    cursor.execute('SELECT COUNT(*) FROM portfolio_summary')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('INSERT INTO portfolio_summary (id, cash_balance, total_invested) VALUES (1, 0, 0)')
+
     conn.commit()
     conn.close()
     print("Database initialized.")
@@ -65,6 +89,71 @@ def get_tickers_by_category(category):
 
     conn.close()
     return tickers
+
+# --- Portfolio Management Functions ---
+
+def get_portfolio_summary():
+    """Retrieves the portfolio summary (cash, total invested)."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE id = 1')
+    summary = cursor.fetchone()
+    conn.close()
+    return summary if summary else (0, 0)
+
+def get_portfolio_holdings():
+    """Retrieves all portfolio transactions."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('SELECT ticker, shares, purchase_price, purchase_date FROM portfolio_transactions ORDER BY purchase_date DESC')
+    holdings = cursor.fetchall()
+    conn.close()
+    return holdings
+
+def execute_investment(ticker, shares, price, investment_amount):
+    """
+    Records a new investment transaction and updates the portfolio summary.
+    This function handles the database transaction atomically.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        # Get current summary
+        cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE id = 1')
+        cash, total_invested = cursor.fetchone()
+
+        # Add the weekly $5
+        new_cash = cash + investment_amount
+        new_total_invested = total_invested + investment_amount
+
+        # 'Buy' the stock
+        cost = shares * price
+        new_cash -= cost
+
+        # Record the transaction
+        from datetime import datetime
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        cursor.execute('''
+            INSERT INTO portfolio_transactions (ticker, shares, purchase_price, purchase_date)
+            VALUES (?, ?, ?, ?)
+        ''', (ticker, shares, price, today_str))
+
+        # Update the summary
+        cursor.execute('''
+            UPDATE portfolio_summary
+            SET cash_balance = ?, total_invested = ?
+            WHERE id = 1
+        ''', (new_cash, new_total_invested))
+
+        conn.commit()
+        print(f"Successfully executed investment: Bought {shares:.4f} shares of {ticker} at ${price:.2f}")
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"Database error during investment: {e}")
+    finally:
+        conn.close()
+
 
 if __name__ == '__main__':
     # This allows the script to be run directly to initialize the database.

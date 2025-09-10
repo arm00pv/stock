@@ -4,7 +4,7 @@ import pandas as pd
 import json
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
-from database import get_tickers_by_category, add_tickers_to_db, init_db
+from database import get_tickers_by_category, add_tickers_to_db, init_db, execute_investment
 
 app = Flask(__name__)
 
@@ -148,6 +148,41 @@ def find_hot_penny_stock():
     return None
 
 
+# --- Portfolio Logic ---
+def invest_weekly_five_dollars():
+    """
+    Selects a stock based on the "hot stock" logic and simulates investing $5.
+    """
+    print("Attempting to execute weekly investment...")
+    investment_amount = 5.00
+
+    # Use the existing hot_stock logic to find a candidate
+    ticker = find_hot_stock()
+
+    if not ticker:
+        print("No suitable stock found for investment today.")
+        return False, "No suitable stock found for investment."
+
+    # Get the latest price for the chosen ticker
+    try:
+        stock = yf.Ticker(ticker)
+        # Use 'regularMarketPrice' for a more current price if available, else fall back to previous close.
+        price = stock.info.get('regularMarketPrice') or stock.history(period='1d')['Close'].iloc[-1]
+
+        if price is None or price <= 0:
+            raise ValueError("Invalid price received.")
+
+    except Exception as e:
+        print(f"Error fetching price for {ticker}: {e}")
+        return False, f"Could not fetch price for {ticker}."
+
+    # Calculate fractional shares and execute the investment in the database
+    shares = investment_amount / price
+    execute_investment(ticker, shares, price, investment_amount)
+
+    return True, f"Successfully invested ${investment_amount} in {ticker}."
+
+
 # --- API Endpoints ---
 @app.route('/')
 def index():
@@ -256,6 +291,16 @@ def high_yield_dividend_stock():
         return jsonify({'ticker': stock_ticker, 'history': picks})
     else:
         return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
+
+@app.route('/api/trigger-investment', methods=['POST'])
+def trigger_investment():
+    # Note: In a real-world production environment, this endpoint should be
+    # secured with an API key or other authentication mechanism to prevent abuse.
+    success, message = invest_weekly_five_dollars()
+    if success:
+        return jsonify({'status': 'success', 'message': message})
+    else:
+        return jsonify({'status': 'error', 'message': message}), 500
 
 if __name__ == '__main__':
     init_db()
