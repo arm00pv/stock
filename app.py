@@ -3,13 +3,20 @@ import yfinance as yf
 import pandas as pd
 import json
 from datetime import datetime, timedelta
+import os
+from flask import request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import (
     get_tickers_by_category, add_tickers_to_db, init_db, execute_investment,
     get_portfolio_summary, get_portfolio_holdings
 )
+from scraper import run_scraper_pipeline
 
 app = Flask(__name__)
+
+# Secret key for securing the scraper endpoint
+# In a real production environment, this should be set as an environment variable
+SCRAPER_API_KEY = os.environ.get('SCRAPER_API_KEY', 'your-super-secret-key')
 
 # Apply the ProxyFix middleware to handle the X-Forwarded-Prefix header
 # This is crucial for running the app in a subdirectory behind a reverse proxy.
@@ -384,6 +391,23 @@ def trigger_investment():
         return jsonify({'status': 'success', 'message': message})
     else:
         return jsonify({'status': 'error', 'message': message}), 500
+
+@app.route('/api/run-scraper', methods=['POST'])
+def run_scraper():
+    # --- Security Check ---
+    api_key = request.headers.get('X-API-Key')
+    if not api_key or api_key != SCRAPER_API_KEY:
+        abort(401, description="Unauthorized: Invalid or missing API key.")
+
+    try:
+        # Running the scraper in a separate thread could be a future improvement
+        # to avoid long request times, but for now, we run it synchronously.
+        print("Scraper run triggered by API call.")
+        run_scraper_pipeline()
+        return jsonify({'status': 'success', 'message': 'Scraper pipeline executed successfully.'})
+    except Exception as e:
+        print(f"Error during API-triggered scrape: {e}")
+        return jsonify({'status': 'error', 'message': 'An error occurred during the scrape.'}), 500
 
 if __name__ == '__main__':
     init_db()

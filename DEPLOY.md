@@ -138,43 +138,60 @@ If you encounter any issues, you can check the logs for Apache2 and your applica
 
 ---
 
-## Step 6 (Optional): Automate Data Scraping
+## Step 6 (Optional): Automate Data Scraping with n8n
 
-To keep the stock lists fresh, you can automate the `scraper.py` script to run daily using a cron job.
+To keep the stock lists fresh, you can automate the scraper to run daily using your `n8n` server. This is a more robust and manageable solution than a traditional cron job.
 
-### Setting the Correct Timezone
+The application has a secure API endpoint specifically for this purpose. Your `n8n` workflow will send a request to this endpoint to trigger the scraping process.
 
-A common issue with cron jobs is that they run based on the server's system time, which is often UTC. To run a job at a specific time in a specific timezone (like 8:00 AM in New York), you must specify that timezone.
+### 1. The Scraper Endpoint
 
-The recommended way to do this is to add the `CRON_TZ` variable to the top of your crontab file. This sets the timezone for all subsequent jobs in that file.
+-   **URL:** `https://zapp.sytes.net/stock/api/run-scraper`
+-   **Method:** `POST`
+-   **Security:** The endpoint is protected by a secret API key. You must include this key in the request headers.
 
-### Instructions
+### 2. Set Your Secret API Key
 
-1.  **Open the crontab editor for the `www-data` user.** It's important to run the cron job as the `www-data` user, as that user owns the project directory and database file.
+The default API key is `your-super-secret-key`. For security, you should change this.
+
+1.  **On your server**, open the `hotstocks.service` file:
     ```bash
-    sudo crontab -u www-data -e
+    sudo nano /etc/systemd/system/hotstocks.service
     ```
-    *Note: If this is the first time you are running `crontab` for this user, you will be prompted to select a text editor. Choose option `1` for `nano`, as it is the easiest to use.*
-
-2.  **Add the timezone and cron job lines.** Paste the following two lines at the top of the file. This will run the scraper every day at 8:00 AM America/New_York time.
-
-    ```cron
-    # Set the timezone for all cron jobs in this file
-    CRON_TZ=America/New_York
-
-    # Run the stock scraper every day at 8:00 AM
-    0 8 * * * /usr/bin/bash -c 'cd /var/www/webhost/stock && source venv/bin/activate && python scraper.py >> /var/log/stock_scraper.log 2>&1'
+2.  **Add an `Environment` variable** with your own secret key. Choose a long, random string.
+    ```ini
+    [Service]
+    User=www-data
+    Group=www-data
+    WorkingDirectory=/var/www/webhost/stock
+    Environment="PATH=/var/www/webhost/stock/venv/bin"
+    Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE" # Add this line
+    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 3 --bind unix:hotstocks.sock -m 007 wsgi:application
     ```
-
-### Cron Job Breakdown:
--   `CRON_TZ=America/New_York`: This ensures the schedule `0 8 * * *` is interpreted as 8:00 AM in the New York timezone.
--   `0 8 * * *`: This means "at minute 0 of hour 8 on every day-of-month, every month, and every day-of-week."
--   `/usr/bin/bash -c '...'`: Runs the command in a bash shell, which is necessary to handle the `cd` and `source` commands.
--   `cd ... && source ... && python ...`: This chain of commands ensures the script runs in the correct directory with the correct Python environment.
--   `>> /var/log/stock_scraper.log 2>&1`: This is crucial for logging. It appends all output and errors to a log file, so you can check if the scraper ran successfully.
-
-3.  **Create and permission the log file.** You must create the log file and give the `www-data` user permission to write to it.
+3.  **Reload the services** to apply the change:
     ```bash
-    sudo touch /var/log/stock_scraper.log
-    sudo chown www-data:www-data /var/log/stock_scraper.log
+    sudo systemctl daemon-reload
+    sudo systemctl restart hotstocks
     ```
+
+### 3. Create the n8n Workflow
+
+On your `n8n` server, create a new workflow with two nodes:
+
+**Node 1: Cron Trigger**
+-   Add a **Cron** node.
+-   Set the **Mode** to `Every Day`.
+-   Set the **Hour** to `8`.
+-   Set the **Minute** to `0`.
+-   Set the **Timezone** to `America/New_York`.
+
+**Node 2: HTTP Request**
+-   Add an **HTTP Request** node and connect it to the Cron node.
+-   Set the **Method** to `POST`.
+-   Set the **URL** to: `https://zapp.sytes.net/stock/api/run-scraper`
+-   Under **Authentication**, select `Header Auth`.
+-   In the **Name** field, enter `X-API-Key`.
+-   In the **Value** field, enter the same secret key you set in the `hotstocks.service` file.
+-   Enable the **"Ignore SSL Issues"** option if your server uses a self-signed certificate and you run into SSL errors.
+
+**Activate your workflow.** Now, every day at 8:00 AM New York time, `n8n` will automatically call your API and trigger the scraper to update the database.

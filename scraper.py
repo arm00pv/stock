@@ -93,9 +93,12 @@ def scrape_website(url, parser_func):
         return None
 
 # --- Main Execution ---
-def main():
+def run_scraper_pipeline():
+    """
+    Runs the full pipeline: initializes DB, scrapes all sources, and prunes old entries.
+    """
     init_db()
-    print("--- Starting Scraper ---")
+    print("--- Starting Scraper Pipeline ---")
 
     sources = [
         {
@@ -122,7 +125,8 @@ def main():
         time.sleep(3)
 
     print("\n--- Pruning old tickers ---")
-    prune_old_tickers(days_old=90) # Remove any ticker not seen in 90 days
+    prune_old_tickers(days_old=90)
+    print("\n--- Scraper Pipeline Finished ---")
 
 if __name__ == '__main__':
-    main()
+    run_scraper_pipeline()
