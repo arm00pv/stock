@@ -166,8 +166,9 @@ The default API key is `your-super-secret-key`. For security, you should change 
     WorkingDirectory=/var/www/webhost/stock
     Environment="PATH=/var/www/webhost/stock/venv/bin"
     Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE" # Add this line
-    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 3 --bind unix:hotstocks.sock -m 007 wsgi:application
+    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 2 --timeout 120 --bind unix:hotstocks.sock -m 007 wsgi:application
     ```
+    *Note on `--timeout 120`: This increases the worker timeout to 120 seconds to prevent the process from being killed during long-running API calls to Yahoo Finance.*
 3.  **Reload the services** to apply the change:
     ```bash
     sudo systemctl daemon-reload
