@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
-from database import init_db, add_tickers_to_db
+from database import init_db, update_tickers_from_source, prune_old_tickers
 
 # --- Parser for simplysafedividends.com ---
 def parse_simplysafedividends(soup):
@@ -101,39 +101,28 @@ def main():
         {
             "category": "monthly_dividend",
             "url": "https://www.simplysafedividends.com/world-of-dividends/posts/42-2025-monthly-dividend-stocks-list-all-76-ranked-and-analyzed",
-            "parser": parse_simplysafedividends,
-            "backup": [
-                'O', 'MAIN', 'ADC', 'STAG', 'GAIN', 'GOOD', 'AGNC', 'LTC'
-            ]
+            "parser": parse_simplysafedividends
         },
         {
             "category": "high_yield",
             "url": "https://www.kiplinger.com/investing/stocks-with-the-highest-dividend-yields-in-the-sandp-500",
-            "parser": parse_kiplinger,
-            "backup": [
-                'MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PFE'
-            ]
+            "parser": parse_kiplinger
         }
-        # Add more sources here in the future
     ]
 
     for source in sources:
-        print(f"\n--- Processing category: {source['category']} ---")
+        print(f"\n--- Processing: {source['category']} from {source['url']} ---")
         scraped_tickers = scrape_website(source['url'], source['parser'])
 
-        if scraped_tickers:
-            print(f"Successfully scraped {len(scraped_tickers)} tickers.")
-            add_tickers_to_db(list(scraped_tickers), source['category'])
+        if scraped_tickers is not None and len(scraped_tickers) > 0:
+            update_tickers_from_source(list(scraped_tickers), source['category'], source['url'])
         else:
-            print(f"Scraping failed for {source['category']}. Falling back to backup list.")
-            backup_tickers = source.get('backup', [])
-            if backup_tickers:
-                add_tickers_to_db(backup_tickers, source['category'])
-            else:
-                print(f"No backup list available for {source['category']}.")
+            print(f"Scraping failed or returned no tickers for source: {source['url']}. No updates will be made from this source.")
 
-        # Respect crawl-delay from robots.txt
         time.sleep(3)
+
+    print("\n--- Pruning old tickers ---")
+    prune_old_tickers(days_old=90) # Remove any ticker not seen in 90 days
 
 if __name__ == '__main__':
     main()

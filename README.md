@@ -49,18 +49,23 @@ The database is populated in two ways:
 
 ### Running the Scraper
 
-The scraper script (`scraper.py`) currently supports fetching tickers for the **Monthly Dividend Stocks** category.
+The scraper script (`scraper.py`) is designed to run periodically (e.g., via a daily cron job) to keep the database updated.
 
-1.  **Install Dependencies**: Ensure you have installed the required packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+It currently scrapes the following categories from different sources:
+-   **Monthly Dividend Stocks**: from `simplysafedividends.com`
+-   **High Yield Dividends**: from `kiplinger.com`
 
-2.  **Run the Script**: Execute the script from your terminal to update the database:
-    ```bash
-    python scraper.py
-    ```
-    This will find and save the latest monthly dividend tickers to the `stocks.db` file. You can run this periodically to keep the list fresh.
+When you run the script, it will:
+1.  Fetch the latest tickers from these sources.
+2.  Add any new tickers to the database.
+3.  Update the `last_seen_date` for tickers that are still present on the lists.
+4.  After processing all sources, it will automatically **prune** any tickers that have not been seen on a list for a long time (default is 90 days), keeping the database clean and relevant.
+
+To run the scraper manually:
+```bash
+python scraper.py
+```
+For instructions on how to automate this script, see the `DEPLOY.md` file.
 
 ---
 
