@@ -7,7 +7,7 @@ import os
 from flask import request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 from database import (
-    get_tickers_by_category, add_tickers_to_db, init_db, execute_investment,
+    get_tickers_by_category, update_tickers_from_source, init_db, execute_investment,
     get_portfolio_summary, get_portfolio_holdings
 )
 from scraper import run_scraper_pipeline
@@ -41,15 +41,15 @@ def initial_populate_db():
     # S&P 500
     if not get_tickers_by_category('sp500'):
         sp500_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA']
-        add_tickers_to_db(sp500_tickers, 'sp500')
+        update_tickers_from_source(sp500_tickers, 'sp500', 'hardcoded_list')
     # Penny Stocks
     if not get_tickers_by_category('penny'):
         penny_tickers = ['SNDL', 'NAKD', 'CTRM', 'ZOM', 'TXMD', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK']
-        add_tickers_to_db(penny_tickers, 'penny')
+        update_tickers_from_source(penny_tickers, 'penny', 'hardcoded_list')
     # High Yield
     if not get_tickers_by_category('high_yield'):
         high_yield_tickers = ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
-        add_tickers_to_db(high_yield_tickers, 'high_yield')
+        update_tickers_from_source(high_yield_tickers, 'high_yield', 'hardcoded_list')
     # The 'monthly_dividend' category is intentionally left to be populated by the scraper.
 
 # --- Generic Data Handling Functions ---
