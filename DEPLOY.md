@@ -158,17 +158,17 @@ The default API key is `your-super-secret-key`. For security, you should change 
     ```bash
     sudo nano /etc/systemd/system/hotstocks.service
     ```
-2.  **Add an `Environment` variable** with your own secret key. Choose a long, random string.
+2.  **Add an `Environment` variable** with your own secret key and set the final `ExecStart` command.
     ```ini
     [Service]
     User=www-data
     Group=www-data
     WorkingDirectory=/var/www/webhost/stock
     Environment="PATH=/var/www/webhost/stock/venv/bin"
-    Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE" # Add this line
-    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 2 --timeout 120 --bind unix:hotstocks.sock -m 007 wsgi:application
+    Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE"
+    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 1 --timeout 120 --bind unix:hotstocks.sock -m 007 wsgi:application
     ```
-    *Note on `--timeout 120`: This increases the worker timeout to 120 seconds to prevent the process from being killed during long-running API calls to Yahoo Finance.*
+    **Note on `--workers 1`:** Using a single worker is the recommended setup for applications using SQLite. It prevents multiple processes from trying to write to the database file at the same time, which can cause locking issues and freezes.
 3.  **Reload the services** to apply the change:
     ```bash
     sudo systemctl daemon-reload
