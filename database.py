@@ -90,6 +90,38 @@ def get_tickers_by_category(category):
     conn.close()
     return tickers
 
+def replace_tickers_for_category(tickers, category):
+    """
+    Replaces all tickers for a given category with a new list.
+    This is an atomic operation.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        # First, delete all existing tickers for this category
+        cursor.execute('DELETE FROM stocks WHERE category = ?', (category,))
+        print(f"Deleted existing tickers for category '{category}'.")
+
+        # Then, add the new tickers
+        from datetime import datetime
+        today_str = datetime.now().strftime('%Y-%m-%d')
+
+        for ticker in tickers:
+            cursor.execute('''
+                INSERT INTO stocks (ticker, category, date_added)
+                VALUES (?, ?, ?)
+            ''', (ticker, category, today_str))
+
+        conn.commit()
+        print(f"Successfully replaced with {len(tickers)} new tickers for '{category}'.")
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"Database error during ticker replacement: {e}")
+    finally:
+        conn.close()
+
 # --- Portfolio Management Functions ---
 
 def get_portfolio_summary():

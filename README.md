@@ -62,4 +62,23 @@ The scraper script (`scraper.py`) currently supports fetching tickers for the **
     ```
     This will find and save the latest monthly dividend tickers to the `stocks.db` file. You can run this periodically to keep the list fresh.
 
+---
+
+## Manual Ticker Updates (`update_tickers.py`)
+
+For categories where a reliable scraper is not available (e.g., 'High Yield', 'Penny Stocks'), you can use the `update_tickers.py` script to manually replace the list for a category.
+
+### How to Use
+
+1.  **Run the script** from your terminal:
+    ```bash
+    python update_tickers.py
+    ```
+
+2.  **Choose a category**: The script will display a list of available categories to update. Enter the number corresponding to your choice.
+
+3.  **Paste the new tickers**: The script will prompt you to paste a new, comma-separated list of tickers.
+
+4.  **Confirm**: Review the parsed list and confirm the action. The script will then delete the old list for that category and insert the new one.
+
 **Note**: Web scraping can be fragile and may break if the source website changes its layout. This script is intended as a starting point for building a more robust data collection system.
