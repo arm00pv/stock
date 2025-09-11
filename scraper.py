@@ -1,117 +1,139 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-
-def scrape_monthly_dividend_stocks():
-    """
-    Scrapes a list of monthly dividend stock tickers from the simplysafedividends article.
-    Includes enhanced error handling and logging.
-    """
-    URL = "https://www.simplysafedividends.com/world-of-dividends/posts/42-2025-monthly-dividend-stocks-list-all-76-ranked-and-analyzed"
-    print(f"Attempting to scrape primary source: {URL}")
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
-
-    try:
-        response = requests.get(URL, headers=headers, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching primary URL: {e}")
-        return None # Return None on failure
-
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    all_tickers = set()
-    ticker_regex = re.compile(r'\(([A-Z]{1,5})\)')
-
-    content = soup.find('div', class_='trix-content')
-    if not content:
-        print("Error: Could not find the main content div with class 'trix-content'. The page structure may have changed.")
-        return None
-
-    # --- Scrape the main list of stocks ---
-    main_headings = content.find_all('h2')
-    if not main_headings:
-        print("Warning: Could not find any `h2` tags for the main stock list.")
-
-    found_main = False
-    for heading in main_headings:
-        if "Monthly Dividend Stock #" in heading.get_text():
-            found_in_section = False
-            for sibling in heading.find_next_siblings(limit=5):
-                if sibling.name == 'div':
-                    strong_tag = sibling.find('strong')
-                    if strong_tag:
-                        match = ticker_regex.search(strong_tag.get_text())
-                        if match:
-                            all_tickers.add(match.group(1))
-                            found_in_section = True
-                            break
-                if sibling.name == 'h2':
-                    break
-            if found_in_section:
-                found_main = True
-
-    if not found_main:
-        print("Warning: No tickers were found in the main 'Monthly Dividend Stock #' sections.")
-
-    # --- Scrape the Micro-Cap and OTC list ---
-    micro_cap_heading = content.find('h2', string=re.compile(r'Micro-Cap and OTC Monthly Dividend Stocks'))
-    if micro_cap_heading:
-        found_micro = False
-        for sibling in micro_cap_heading.find_next_siblings():
-            if sibling.name == 'ul':
-                li = sibling.find('li')
-                if li:
-                    strong_tag = li.find('strong')
-                    if strong_tag:
-                        match = ticker_regex.search(strong_tag.get_text())
-                        if match:
-                            all_tickers.add(match.group(1))
-                            found_micro = True
-            if sibling.name == 'h2':
-                break
-        if not found_micro:
-            print("Warning: Found the Micro-Cap heading but extracted no tickers from the list.")
-    else:
-        print("Warning: Could not find the 'Micro-Cap and OTC Monthly Dividend Stocks' heading.")
-
-    return sorted(list(all_tickers))
-
+import time
 from database import init_db, add_tickers_to_db
 
-def get_backup_monthly_dividend_tickers():
-    """
-    Returns a hardcoded list of known monthly dividend tickers as a fallback.
-    """
-    print("Using hardcoded backup list for monthly dividend stocks.")
-    return [
-        'O', 'MAIN', 'ADC', 'STAG', 'RIOCF', 'GAIN', 'DOC', 'LAND', 'PECO',
-        'EPR', 'SLG', 'APLE', 'SILA', 'PFLT', 'GOOD', 'GLAD', 'LTC', 'HRZN',
-        'PSEC', 'WSR', 'SCM', 'EFC', 'EARN', 'OXSQ', 'DX', 'PNNT', 'AGNC',
-        'ARR', 'ORC', 'SBR', 'GWRS', 'SRRTF', 'BSRTF', 'CTRRF', 'FRMUF',
-        'SISXF', 'BEVFF', 'GROW', 'MDV', 'MHCUF', 'PMREF', 'TBCRF', 'FTCO',
-        'PIFYF', 'PRMRF', 'ALPS', 'TNEYF'
-    ]
+# --- Parser for simplysafedividends.com ---
+def parse_simplysafedividends(soup):
+    all_tickers = set()
+    ticker_regex = re.compile(r'\(([A-Z]{1,5})\)')
+    content = soup.find('div', class_='trix-content')
+    if not content:
+        print("Error (simplysafedividends): Could not find the main content div.")
+        return set()
 
-if __name__ == '__main__':
-    # Initialize the database and table first
+    # Main list
+    main_headings = content.find_all('h2')
+    for heading in main_headings:
+        if "Monthly Dividend Stock #" in heading.get_text():
+            for sibling in heading.find_next_siblings(limit=5):
+                if sibling.name == 'div' and sibling.find('strong'):
+                    match = ticker_regex.search(sibling.find('strong').get_text())
+                    if match:
+                        all_tickers.add(match.group(1))
+                        break
+                if sibling.name == 'h2':
+                    break
+
+    # Micro-Cap list
+    micro_cap_heading = content.find('h2', string=re.compile(r'Micro-Cap and OTC Monthly Dividend Stocks'))
+    if micro_cap_heading:
+        for sibling in micro_cap_heading.find_next_siblings():
+            if sibling.name == 'ul' and sibling.find('li') and sibling.find('li').find('strong'):
+                match = ticker_regex.search(sibling.find('li').find('strong').get_text())
+                if match:
+                    all_tickers.add(match.group(1))
+            if sibling.name == 'h2':
+                break
+    return all_tickers
+
+# --- Parser for kiplinger.com ---
+def parse_kiplinger(soup):
+    try:
+        all_tickers = set()
+        ticker_regex = re.compile(r'\(([A-Z]{1,5})\)')
+
+        # --- DEBUGGING KIPLINGER ---
+        # print(soup.prettify())
+        # --- END DEBUGGING ---
+
+        # Find the container for the main article body
+        body = soup.find('div', id='article-body')
+        if not body:
+            print("Error (kiplinger): Could not find the article body div.")
+            return set()
+
+        # Tickers are in `<a>` tags with a specific href pattern
+        links = body.find_all('a', href=re.compile(r'/tfn/ticker\.html\?ticker='))
+        if not links:
+            print("Warning (kiplinger): Could not find any ticker links with the expected href pattern.")
+
+        for link in links:
+            # The ticker is sometimes in the link text, sometimes in the href itself.
+            # Let's prioritize the href as it's more reliable.
+            href = link.get('href', '')
+            match = re.search(r'ticker=([A-Z]{1,5})', href)
+            if match:
+                all_tickers.add(match.group(1))
+
+        if not all_tickers:
+            print("Warning (kiplinger): No tickers found via href. Trying text search as fallback.")
+            # Fallback to searching text if no links were found
+            text_matches = ticker_regex.findall(body.get_text())
+            for ticker in text_matches:
+                all_tickers.add(ticker)
+
+        return all_tickers
+    except Exception as e:
+        print(f"An unexpected error occurred in parse_kiplinger: {e}")
+        return set()
+
+# --- Generic Scraper ---
+def scrape_website(url, parser_func):
+    print(f"Attempting to scrape source: {url}")
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        return parser_func(soup)
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching URL {url}: {e}")
+        return None
+
+# --- Main Execution ---
+def main():
     init_db()
-
     print("--- Starting Scraper ---")
 
-    # Try the primary scraper first
-    scraped_tickers = scrape_monthly_dividend_stocks()
+    sources = [
+        {
+            "category": "monthly_dividend",
+            "url": "https://www.simplysafedividends.com/world-of-dividends/posts/42-2025-monthly-dividend-stocks-list-all-76-ranked-and-analyzed",
+            "parser": parse_simplysafedividends,
+            "backup": [
+                'O', 'MAIN', 'ADC', 'STAG', 'GAIN', 'GOOD', 'AGNC', 'LTC'
+            ]
+        },
+        {
+            "category": "high_yield",
+            "url": "https://www.kiplinger.com/investing/stocks-with-the-highest-dividend-yields-in-the-sandp-500",
+            "parser": parse_kiplinger,
+            "backup": [
+                'MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PFE'
+            ]
+        }
+        # Add more sources here in the future
+    ]
 
-    # If the primary scraper fails or returns no tickers, use the backup
-    if not scraped_tickers:
-        print("Primary scraper failed or found no tickers. Falling back to backup list.")
-        scraped_tickers = get_backup_monthly_dividend_tickers()
+    for source in sources:
+        print(f"\n--- Processing category: {source['category']} ---")
+        scraped_tickers = scrape_website(source['url'], source['parser'])
 
-    if scraped_tickers:
-        print(f"Found {len(scraped_tickers)} tickers for category 'monthly_dividend'.")
-        add_tickers_to_db(scraped_tickers, 'monthly_dividend')
-    else:
-        print("Error: Both primary scraper and backup failed. No tickers were added.")
+        if scraped_tickers:
+            print(f"Successfully scraped {len(scraped_tickers)} tickers.")
+            add_tickers_to_db(list(scraped_tickers), source['category'])
+        else:
+            print(f"Scraping failed for {source['category']}. Falling back to backup list.")
+            backup_tickers = source.get('backup', [])
+            if backup_tickers:
+                add_tickers_to_db(backup_tickers, source['category'])
+            else:
+                print(f"No backup list available for {source['category']}.")
+
+        # Respect crawl-delay from robots.txt
+        time.sleep(3)
+
+if __name__ == '__main__':
+    main()
