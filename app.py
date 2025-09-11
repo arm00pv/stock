@@ -193,43 +193,51 @@ def index():
 
 @app.route('/api/hot-stock')
 def hot_stock():
-    picks = get_picks_from_file(DATA_FILE)
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        picks = get_picks_from_file(DATA_FILE)
+        today_str = datetime.now().strftime('%Y-%m-%d')
 
-    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+        todays_pick = next((p for p in picks if p['date'] == today_str), None)
 
-    if todays_pick:
-        stock_ticker = todays_pick['ticker']
-    else:
-        stock_ticker = find_hot_stock()
+        if todays_pick:
+            stock_ticker = todays_pick['ticker']
+        else:
+            stock_ticker = find_hot_stock()
+            if stock_ticker:
+                save_pick_to_file(stock_ticker, DATA_FILE)
+                picks = get_picks_from_file(DATA_FILE) # Refresh picks
+
         if stock_ticker:
-            save_pick_to_file(stock_ticker, DATA_FILE)
-            picks = get_picks_from_file(DATA_FILE) # Refresh picks
-
-    if stock_ticker:
-        return jsonify({'ticker': stock_ticker, 'history': picks})
-    else:
-        return jsonify({'ticker': 'No hot stock found today.', 'history': picks})
+            return jsonify({'ticker': stock_ticker, 'history': picks})
+        else:
+            return jsonify({'ticker': 'No hot stock found today.', 'history': picks})
+    except Exception as e:
+        print(f"Error in /api/hot-stock: {e}")
+        return jsonify({'ticker': 'Error loading data.', 'history': []})
 
 @app.route('/api/penny-stock')
 def penny_stock():
-    picks = get_picks_from_file(PENNY_DATA_FILE)
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        picks = get_picks_from_file(PENNY_DATA_FILE)
+        today_str = datetime.now().strftime('%Y-%m-%d')
 
-    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+        todays_pick = next((p for p in picks if p['date'] == today_str), None)
 
-    if todays_pick:
-        stock_ticker = todays_pick['ticker']
-    else:
-        stock_ticker = find_hot_penny_stock()
+        if todays_pick:
+            stock_ticker = todays_pick['ticker']
+        else:
+            stock_ticker = find_hot_penny_stock()
+            if stock_ticker:
+                save_pick_to_file(stock_ticker, PENNY_DATA_FILE)
+                picks = get_picks_from_file(PENNY_DATA_FILE) # Refresh picks
+
         if stock_ticker:
-            save_pick_to_file(stock_ticker, PENNY_DATA_FILE)
-            picks = get_picks_from_file(PENNY_DATA_FILE) # Refresh picks
-
-    if stock_ticker:
-        return jsonify({'ticker': stock_ticker, 'history': picks})
-    else:
-        return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks})
+            return jsonify({'ticker': stock_ticker, 'history': picks})
+        else:
+            return jsonify({'ticker': 'No hot penny stock found today.', 'history': picks})
+    except Exception as e:
+        print(f"Error in /api/penny-stock: {e}")
+        return jsonify({'ticker': 'Error loading data.', 'history': []})
 
 # --- Dividend Stock Logic ---
 def find_dividend_stock(filename, category):
@@ -257,43 +265,51 @@ def find_dividend_stock(filename, category):
 # --- API Endpoints ---
 @app.route('/api/monthly-dividend')
 def monthly_dividend_stock():
-    picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
+        today_str = datetime.now().strftime('%Y-%m-%d')
 
-    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+        todays_pick = next((p for p in picks if p['date'] == today_str), None)
 
-    if todays_pick:
-        stock_ticker = todays_pick['ticker']
-    else:
-        stock_ticker = find_dividend_stock(MONTHLY_DIVIDEND_DATA_FILE, 'monthly_dividend')
+        if todays_pick:
+            stock_ticker = todays_pick['ticker']
+        else:
+            stock_ticker = find_dividend_stock(MONTHLY_DIVIDEND_DATA_FILE, 'monthly_dividend')
+            if stock_ticker:
+                save_pick_to_file(stock_ticker, MONTHLY_DIVIDEND_DATA_FILE)
+                picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
+
         if stock_ticker:
-            save_pick_to_file(stock_ticker, MONTHLY_DIVIDEND_DATA_FILE)
-            picks = get_picks_from_file(MONTHLY_DIVIDEND_DATA_FILE)
-
-    if stock_ticker:
-        return jsonify({'ticker': stock_ticker, 'history': picks})
-    else:
-        return jsonify({'ticker': 'No monthly dividend stock found today.', 'history': picks})
+            return jsonify({'ticker': stock_ticker, 'history': picks})
+        else:
+            return jsonify({'ticker': 'No monthly dividend stock found today.', 'history': picks})
+    except Exception as e:
+        print(f"Error in /api/monthly-dividend: {e}")
+        return jsonify({'ticker': 'Error loading data.', 'history': []})
 
 @app.route('/api/high-yield-dividend')
 def high_yield_dividend_stock():
-    picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
-    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
+        today_str = datetime.now().strftime('%Y-%m-%d')
 
-    todays_pick = next((p for p in picks if p['date'] == today_str), None)
+        todays_pick = next((p for p in picks if p['date'] == today_str), None)
 
-    if todays_pick:
-        stock_ticker = todays_pick['ticker']
-    else:
-        stock_ticker = find_dividend_stock(HIGH_YIELD_DATA_FILE, 'high_yield')
+        if todays_pick:
+            stock_ticker = todays_pick['ticker']
+        else:
+            stock_ticker = find_dividend_stock(HIGH_YIELD_DATA_FILE, 'high_yield')
+            if stock_ticker:
+                save_pick_to_file(stock_ticker, HIGH_YIELD_DATA_FILE)
+                picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
+
         if stock_ticker:
-            save_pick_to_file(stock_ticker, HIGH_YIELD_DATA_FILE)
-            picks = get_picks_from_file(HIGH_YIELD_DATA_FILE)
-
-    if stock_ticker:
-        return jsonify({'ticker': stock_ticker, 'history': picks})
-    else:
-        return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
+            return jsonify({'ticker': stock_ticker, 'history': picks})
+        else:
+            return jsonify({'ticker': 'No high yield dividend stock found today.', 'history': picks})
+    except Exception as e:
+        print(f"Error in /api/high-yield-dividend: {e}")
+        return jsonify({'ticker': 'Error loading data.', 'history': []})
 
 @app.route('/api/portfolio')
 def portfolio_data():
