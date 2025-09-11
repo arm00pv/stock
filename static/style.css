@@ -48,9 +48,9 @@ h1, h2 {
     border: none;
     outline: none;
     cursor: pointer;
-    padding: 14px 12px; /* Adjusted padding */
+    padding: 14px 10px; /* Further adjusted padding */
     transition: 0.3s;
-    font-size: 14px; /* Adjusted font size */
+    font-size: 12px; /* Further adjusted font size */
     border-radius: 8px 8px 0 0;
 }
 
