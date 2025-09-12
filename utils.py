@@ -1,4 +1,5 @@
 import pandas_market_calendars as mcal
+import pandas as pd
 from datetime import datetime
 import pytz
 
