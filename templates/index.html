@@ -60,8 +60,6 @@
             <h2>Holdings</h2>
             <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
         </div>
-
-        <!-- New Daily Portfolio Tab -->
         <div id="PortfolioDaily" class="tab-content">
             <h1>$5 Daily Portfolio (Trading Days Only)</h1>
             <div id="portfolio-summary-daily_investment">Loading...</div>
@@ -71,6 +69,9 @@
     </div>
 
     <script>
+        // Set the base URL for the API from Flask's url_for to handle the /stock/ prefix
+        const API_BASE_URL = "{{ url_for('index', _external=False) }}";
+
         function openTab(evt, tabName) {
             let i, tabcontent, tablinks;
             tabcontent = document.getElementsByClassName("tab-content");
@@ -96,13 +97,11 @@
             const dailyPickDiv = document.getElementById(dailyPickId);
             const historicalPicksUl = document.getElementById(historicalPicksId).querySelector('ul');
 
-            fetch(endpoint)
+            fetch(endpoint) // These endpoints are already relative to the app root
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
-
                     dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}</h2>`;
-
                     historicalPicksUl.innerHTML = '';
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
@@ -125,8 +124,16 @@
             const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('tbody');
             const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('thead');
 
-            fetch(`/api/portfolio/${portfolioName}`)
-                .then(response => response.json())
+            // Construct the full API path, ensuring no double slashes
+            const portfolioUrl = `${API_BASE_URL.replace(/\/$/, '')}/api/portfolio/${portfolioName}`;
+
+            fetch(portfolioUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Network response was not ok: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.error) throw new Error(data.error);
 
@@ -198,12 +205,13 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             startCountdown();
+            // The url_for calls here are fine because they generate the correct full path
             populatePicks("{{ url_for('api_hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
             populatePicks("{{ url_for('api_penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
             populatePicks("{{ url_for('api_high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
 
-            // Load all portfolios on page load. It's simpler and more robust than click handlers.
+            // Load all portfolios on page load
             populatePortfolio('main');
             populatePortfolio('monthly_dividend');
             populatePortfolio('daily_investment');
