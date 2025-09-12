@@ -77,6 +77,7 @@
         }
 
         function createTickerLink(ticker) {
+            if (!ticker || ticker.includes('Error')) return ticker;
             return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
         }
 
@@ -109,9 +110,9 @@
         }
 
         function populatePortfolio(portfolioName) {
-            const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName.replace('_', '-')}`);
-            const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName.replace('_', '-')}`).querySelector('tbody');
-            const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName.replace('_', '-')}`).querySelector('thead');
+            const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName}`);
+            const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('tbody');
+            const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('thead');
 
             fetch(`/api/portfolio/${portfolioName}`)
                 .then(response => response.json())
@@ -186,11 +187,11 @@
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
             populatePicks("{{ url_for('api_high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
 
-            // Add event listeners to portfolio tabs to load data when clicked
+            // Add event listeners to portfolio tabs to load data when they are clicked
             document.querySelector('button[onclick*="PortfolioMain"]').addEventListener('click', () => populatePortfolio('main'));
             document.querySelector('button[onclick*="PortfolioMonthly"]').addEventListener('click', () => populatePortfolio('monthly_dividend'));
 
-            // Initial load for the visible portfolio tab
+            // Initial load for the main portfolio since it's the default visible one
             populatePortfolio('main');
         });
     </script>
