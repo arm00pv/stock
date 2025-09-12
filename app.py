@@ -29,7 +29,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 # --- Categories ---
 CATEGORIES = {
     'hot_stock': {'db_category': 'sp500', 'display_name': 'Hot Stocks'},
-    'penny_stock': {'db_category': 'penny', 'display_name': 'Penny Stocks'},
+    'penny_stock': {'db_category': 'penny', 'display_name': '$5 or Less'},
     'monthly_dividend': {'db_category': 'monthly_dividend', 'display_name': 'Monthly Dividends'},
     'high_yield_dividend': {'db_category': 'high_yield', 'display_name': 'High-Yield Dividends'}
 }
@@ -49,10 +49,11 @@ def find_hot_stock(category):
             if hist.empty or len(hist) < 4:
                 continue
 
-            is_penny = category == 'penny' and hist['Close'].iloc[-1] <= 2.0
+            is_penny = category == 'penny'
+            is_under_limit = hist['Close'].iloc[-1] <= 5.0
             is_hot = all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4))
 
-            if is_hot and (not is_penny or (is_penny and hist['Close'].iloc[-1] <= 2.0)):
+            if is_hot and (not is_penny or (is_penny and is_under_limit)):
                  return ticker
         except Exception as e:
             print(f"Could not analyze ticker {ticker}: {e}")
