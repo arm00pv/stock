@@ -23,25 +23,25 @@
         <!-- Pick-based Tabs -->
         <div id="HotStocks" class="tab-content" style="display:block;">
             <h1>Hot Stock of the Day</h1>
-            <div id="hot-daily-pick" class="daily-pick-container"></div>
+            <div id="hot-daily-pick" class="daily-pick-container">Loading...</div>
             <h2>Historical Picks</h2>
             <div id="hot-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
         <div id="PennyStocks" class="tab-content">
             <h1>Hot Penny Stock of the Day</h1>
-            <div id="penny-daily-pick" class="daily-pick-container"></div>
+            <div id="penny-daily-pick" class="daily-pick-container">Loading...</div>
             <h2>Historical Picks</h2>
             <div id="penny-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
         <div id="MonthlyDividend" class="tab-content">
             <h1>Monthly Dividend Pick of the Day</h1>
-            <div id="monthly-daily-pick" class="daily-pick-container"></div>
+            <div id="monthly-daily-pick" class="daily-pick-container">Loading...</div>
             <h2>Historical Picks</h2>
             <div id="monthly-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
         <div id="HighYield" class="tab-content">
             <h1>High Yield Pick of the Day</h1>
-            <div id="high-yield-daily-pick" class="daily-pick-container"></div>
+            <div id="high-yield-daily-pick" class="daily-pick-container">Loading...</div>
             <h2>Historical Picks</h2>
             <div id="high-yield-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
@@ -49,13 +49,13 @@
         <!-- Portfolio Tabs -->
         <div id="PortfolioMain" class="tab-content">
             <h1>$5 a Week Portfolio</h1>
-            <div id="portfolio-summary-main"></div>
+            <div id="portfolio-summary-main">Loading...</div>
             <h2>Holdings</h2>
             <table id="portfolio-holdings-main"><thead></thead><tbody></tbody></table>
         </div>
         <div id="PortfolioMonthly" class="tab-content">
             <h1>$5 a Week Monthly Dividends Portfolio</h1>
-            <div id="portfolio-summary-monthly_dividend"></div>
+            <div id="portfolio-summary-monthly_dividend">Loading...</div>
             <h2>Holdings</h2>
             <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
         </div>
@@ -63,39 +63,88 @@
 
     <script>
         function openTab(evt, tabName) {
-            // ... (tab switching logic remains the same)
+            let i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tab-link");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        function createTickerLink(ticker) {
+            return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
         }
 
         function populatePicks(endpoint, dailyPickId, historicalPicksId) {
-            // ... (this function remains the same)
+            const dailyPickDiv = document.getElementById(dailyPickId);
+            const historicalPicksUl = document.getElementById(historicalPicksId).querySelector('ul');
+
+            fetch(endpoint)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+
+                    dailyPickDiv.innerHTML = createTickerLink(data.ticker);
+
+                    historicalPicksUl.innerHTML = '';
+                    if (data.history && data.history.length > 0) {
+                        data.history.forEach(pick => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `${pick.date}: ${createTickerLink(pick.ticker)}`;
+                            historicalPicksUl.appendChild(li);
+                        });
+                    } else {
+                        historicalPicksUl.innerHTML = '<li>No historical picks yet.</li>';
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error fetching pick data for ${endpoint}:`, error);
+                    dailyPickDiv.innerHTML = `<p>Could not load pick data.</p>`;
+                });
         }
 
         function populatePortfolio(portfolioName) {
-            const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName}`);
-            const holdingsTable = document.getElementById(`portfolio-holdings-${portfolioName}`);
-            const holdingsTableBody = holdingsTable.querySelector('tbody');
-            const holdingsTableHead = holdingsTable.querySelector('thead');
+            const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName.replace('_', '-')}`);
+            const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName.replace('_', '-')}`).querySelector('tbody');
+            const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName.replace('_', '-')}`).querySelector('thead');
 
             fetch(`/api/portfolio/${portfolioName}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
 
-                    summaryDiv.innerHTML = `...`; // Populate summary
+                    summaryDiv.innerHTML = `
+                        <p><strong>Total Invested:</strong> $${data.total_invested.toFixed(2)}</p>
+                        <p><strong>Cash Balance:</strong> $${data.cash_balance.toFixed(2)}</p>
+                        <p><strong>Current Market Value:</strong> $${data.current_market_value.toFixed(2)}</p>
+                        <p><strong>Total Assets:</strong> $${data.total_assets.toFixed(2)}</p>
+                    `;
 
                     holdingsTableHead.innerHTML = `
                         <tr>
-                            <th>Ticker</th><th>Shares</th><th>Avg. Cost</th>
-                            <th>Current Price</th><th>Current Value</th>
+                            <th>Ticker</th><th>Shares</th><th>Purchase Price</th>
+                            <th>Purchase Date</th><th>Current Price</th><th>Current Value</th>
                         </tr>`;
                     holdingsTableBody.innerHTML = '';
                     if (data.holdings && data.holdings.length > 0) {
                         data.holdings.forEach(h => {
                             const row = holdingsTableBody.insertRow();
-                            row.innerHTML = `...`; // Populate row
+                            row.innerHTML = `
+                                <td>${createTickerLink(h.ticker)}</td>
+                                <td>${h.shares.toFixed(6)}</td>
+                                <td>$${h.purchase_price.toFixed(2)}</td>
+                                <td>${h.purchase_date}</td>
+                                <td>$${h.current_price.toFixed(2)}</td>
+                                <td>$${h.current_value.toFixed(2)}</td>
+                            `;
                         });
                     } else {
-                        holdingsTableBody.innerHTML = `<tr><td colspan="5">No holdings yet.</td></tr>`;
+                        holdingsTableBody.innerHTML = `<tr><td colspan="6">No holdings yet.</td></tr>`;
                     }
                 })
                 .catch(error => {
@@ -105,17 +154,44 @@
         }
 
         function startCountdown() {
-            // ... (countdown logic remains the same)
+            const countdownSpan = document.getElementById('countdown');
+            function update() {
+                const now = new Date();
+                const newYorkTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+                let tomorrow = new Date(newYorkTime);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(8, 0, 0, 0);
+
+                if (newYorkTime.getHours() >= 8) {
+                    // It's past 8 AM, countdown to tomorrow
+                } else {
+                    // It's before 8 AM, countdown to today 8 AM
+                    tomorrow.setDate(tomorrow.getDate() - 1);
+                }
+
+                const diff = tomorrow.getTime() - newYorkTime.getTime();
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diff % (1000 * 60)) / 1000);
+                countdownSpan.textContent = `${hours}h ${mins}m ${secs}s`;
+            }
+            update();
+            setInterval(update, 1000);
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             startCountdown();
-            populatePicks("{{ url_for('hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
-            populatePicks("{{ url_for('penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
-            populatePicks("{{ url_for('monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
-            populatePicks("{{ url_for('high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
+            populatePicks("{{ url_for('api_hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
+            populatePicks("{{ url_for('api_penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
+            populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
+            populatePicks("{{ url_for('api_high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
+
+            // Add event listeners to portfolio tabs to load data when clicked
+            document.querySelector('button[onclick*="PortfolioMain"]').addEventListener('click', () => populatePortfolio('main'));
+            document.querySelector('button[onclick*="PortfolioMonthly"]').addEventListener('click', () => populatePortfolio('monthly_dividend'));
+
+            // Initial load for the visible portfolio tab
             populatePortfolio('main');
-            populatePortfolio('monthly_dividend');
         });
     </script>
 </body>

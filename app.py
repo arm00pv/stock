@@ -1,11 +1,10 @@
 import os
-import json
 from datetime import datetime, timedelta
-
 import yfinance as yf
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+# Import all necessary functions from our new database module
 from database import (
     init_db,
     get_tickers_by_category,
@@ -13,6 +12,10 @@ from database import (
     get_portfolio_summary,
     get_portfolio_holdings,
     execute_investment,
+    save_daily_pick,
+    get_pick_history_for_category,
+    get_todays_pick_for_category,
+    get_recently_picked_tickers
 )
 from scraper import run_scraper_pipeline
 
@@ -20,119 +23,87 @@ app = Flask(__name__)
 
 # --- Configuration ---
 SCRAPER_API_KEY = os.environ.get('SCRAPER_API_KEY', 'your-super-secret-key')
+# Fix for running behind a reverse proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
-# --- Constants for daily pick history files ---
-DATA_FILE = 'data/daily_picks.json'
-PENNY_DATA_FILE = 'data/penny_picks.json'
-MONTHLY_DIVIDEND_DATA_FILE = 'data/monthly_dividend_picks.json'
-HIGH_YIELD_DATA_FILE = 'data/high_yield_picks.json'
-
-
-# --- Initial Data Population ---
-def initial_populate_db():
-    """Populates the DB with starter lists if they are empty."""
-    print("Checking if initial data population is needed...")
-    starter_lists = {
-        'sp500': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA'],
-        'penny': ['SNDL', 'CTRM', 'ZOM', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK'],
-        'high_yield': ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
-    }
-    for category, tickers in starter_lists.items():
-        if not get_tickers_by_category(category):
-            update_tickers_from_source(tickers, category, 'hardcoded_list')
-
-# --- File-based History (Legacy, but still used by finder funcs) ---
-def get_picks_from_file(filename):
-    try:
-        with open(filename, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def save_pick_to_file(ticker, filename):
-    picks = get_picks_from_file(filename)
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    if any(p['date'] == today_str for p in picks):
-        return
-    picks.insert(0, {'date': today_str, 'ticker': ticker})
-    with open(filename, 'w') as f:
-        json.dump(picks, f, indent=4)
+# --- Categories ---
+CATEGORIES = {
+    'hot_stock': {'db_category': 'sp500', 'display_name': 'Hot Stocks'},
+    'penny_stock': {'db_category': 'penny', 'display_name': 'Penny Stocks'},
+    'monthly_dividend': {'db_category': 'monthly_dividend', 'display_name': 'Monthly Dividends'},
+    'high_yield_dividend': {'db_category': 'high_yield', 'display_name': 'High-Yield Dividends'}
+}
 
 # --- Stock Finding Logic ---
-def _get_recent_picks(filename):
-    picks = get_picks_from_file(filename)
-    one_year_ago = datetime.now() - timedelta(days=365)
-    recent_picks = set()
-    for pick in picks:
-        if datetime.strptime(pick['date'], '%Y-%m-%d') > one_year_ago:
-            recent_picks.add(pick['ticker'])
-    return recent_picks
-
-def find_hot_stock():
-    recent_picks = _get_recent_picks(DATA_FILE)
-    tickers = get_tickers_by_category('sp500')
+def find_hot_stock(category):
+    recent_picks = get_recently_picked_tickers(category)
+    tickers = get_tickers_by_category(category)
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
+
     for ticker in tickers:
-        if ticker in recent_picks: continue
-        hist = yf.Ticker(ticker).history(start=start_date, end=end_date)
-        if len(hist) >= 4 and all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4)):
+        if ticker in recent_picks:
+            continue
+        try:
+            hist = yf.Ticker(ticker).history(start=start_date, end=end_date, auto_adjust=False)
+            if hist.empty or len(hist) < 4:
+                continue
+
+            is_penny = category == 'penny' and hist['Close'].iloc[-1] <= 2.0
+            is_hot = all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4))
+
+            if is_hot and (not is_penny or (is_penny and hist['Close'].iloc[-1] <= 2.0)):
+                 return ticker
+        except Exception as e:
+            print(f"Could not analyze ticker {ticker}: {e}")
+
+    # Fallback: if no stock meets the criteria, return the first one not picked recently
+    for ticker in tickers:
+        if ticker not in recent_picks:
             return ticker
-    return None
 
-def find_hot_penny_stock():
-    recent_picks = _get_recent_picks(PENNY_DATA_FILE)
-    tickers = get_tickers_by_category('penny')
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=7)
-    for ticker in tickers:
-        if ticker in recent_picks: continue
-        hist = yf.Ticker(ticker).history(start=start_date, end=end_date)
-        if len(hist) >= 4 and hist['Close'].iloc[-1] <= 2.0:
-            if all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4)):
-                return ticker
-    return None
+    return tickers[0] if tickers else None
 
-def find_dividend_stock(category, filename):
-    recent_picks = _get_recent_picks(filename)
+def find_dividend_stock(category):
+    recent_picks = get_recently_picked_tickers(category)
     tickers = get_tickers_by_category(category)
     for ticker in tickers:
         if ticker not in recent_picks:
             return ticker
     return tickers[0] if tickers else None
 
-# --- Portfolio Investment Logic ---
-def execute_portfolio_investment(portfolio_name, investment_candidate_func):
-    print(f"Executing investment for portfolio: {portfolio_name}...")
-    investment_amount = 5.00
-    ticker = investment_candidate_func()
-    if not ticker:
-        return False, f"No suitable stock found for {portfolio_name} portfolio."
-    try:
-        price = yf.Ticker(ticker).info.get('regularMarketPrice')
-        if not price or price <= 0: raise ValueError("Invalid price")
-    except Exception as e:
-        return False, f"Could not fetch price for {ticker}: {e}"
-    shares = investment_amount / price
-    execute_investment(portfolio_name, ticker, shares, price, investment_amount)
-    return True, f"Successfully invested ${investment_amount:.2f} in {ticker}."
-
 # --- Generic Endpoint Logic ---
-def get_daily_pick_response(data_file, finder_func):
+def get_daily_pick_response(category_key):
+    db_category = CATEGORIES[category_key]['db_category']
+
     try:
-        picks = get_picks_from_file(data_file)
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        todays_pick = next((p for p in picks if p['date'] == today_str), None)
-        stock_ticker = todays_pick['ticker'] if todays_pick else finder_func()
-        if stock_ticker and not todays_pick:
-            save_pick_to_file(stock_ticker, data_file)
-            picks = get_picks_from_file(data_file)
+        # 1. Check if a pick was already made today
+        todays_pick = get_todays_pick_for_category(db_category)
+        stock_ticker = todays_pick['ticker'] if todays_pick else None
+
+        # 2. If no pick for today, find one
+        if not stock_ticker:
+            if 'dividend' in category_key:
+                stock_ticker = find_dividend_stock(db_category)
+            else:
+                stock_ticker = find_hot_stock(db_category)
+
+            # 3. If a new stock is found, save it to the DB
+            if stock_ticker:
+                save_daily_pick(db_category, stock_ticker)
+
+        # 4. Fetch the full history for the response
+        history = get_pick_history_for_category(db_category)
         message = stock_ticker if stock_ticker else 'No suitable stock found today.'
-        return jsonify({'ticker': message, 'history': picks})
+
+        return jsonify({'ticker': message, 'history': history})
+
     except Exception as e:
-        print(f"Error in get_daily_pick_response: {e}")
-        return jsonify({'ticker': 'Error loading data.', 'history': []})
+        print(f"Error in get_daily_pick_response for '{db_category}': {e}")
+        # Log the full error for debugging
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ticker': 'Error loading data.', 'history': []}), 500
 
 # --- API Endpoints ---
 @app.route('/')
@@ -140,39 +111,77 @@ def index():
     return render_template('index.html')
 
 @app.route('/api/hot-stock')
-def hot_stock():
-    return get_daily_pick_response(DATA_FILE, find_hot_stock)
+def api_hot_stock():
+    return get_daily_pick_response('hot_stock')
 
 @app.route('/api/penny-stock')
-def penny_stock():
-    return get_daily_pick_response(PENNY_DATA_FILE, find_hot_penny_stock)
+def api_penny_stock():
+    return get_daily_pick_response('penny_stock')
 
 @app.route('/api/monthly-dividend')
-def monthly_dividend_stock():
-    return get_daily_pick_response(MONTHLY_DIVIDEND_DATA_FILE, lambda: find_dividend_stock('monthly_dividend', MONTHLY_DIVIDEND_DATA_FILE))
+def api_monthly_dividend_stock():
+    return get_daily_pick_response('monthly_dividend')
 
 @app.route('/api/high-yield-dividend')
-def high_yield_dividend_stock():
-    return get_daily_pick_response(HIGH_YIELD_DATA_FILE, lambda: find_dividend_stock('high_yield', HIGH_YIELD_DATA_FILE))
+def api_high_yield_dividend_stock():
+    return get_daily_pick_response('high_yield_dividend')
 
 @app.route('/api/portfolio/<portfolio_name>')
 def portfolio_data(portfolio_name):
-    # ... (This logic is complex and assumed correct from previous steps) ...
-    return jsonify({'portfolio_name': portfolio_name, 'summary': (0,0), 'holdings': []})
+    """Provides a complete summary of a given portfolio."""
+    summary = get_portfolio_summary(portfolio_name)
+    holdings = get_portfolio_holdings(portfolio_name)
+
+    # Calculate current value of holdings
+    total_value = 0
+    detailed_holdings = []
+    for holding in holdings:
+        try:
+            current_price = yf.Ticker(holding['ticker']).info.get('regularMarketPrice')
+            if not current_price: current_price = holding['purchase_price'] # fallback
+            value = holding['shares'] * current_price
+            total_value += value
+            detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+        except Exception:
+            total_value += holding['shares'] * holding['purchase_price'] # fallback on error
+            detailed_holdings.append({**holding, 'current_price': holding['purchase_price'], 'current_value': holding['shares'] * holding['purchase_price']})
+
+    return jsonify({
+        'portfolio_name': portfolio_name,
+        'cash_balance': summary[0],
+        'total_invested': summary[1],
+        'current_market_value': total_value,
+        'total_assets': summary[0] + total_value,
+        'holdings': detailed_holdings
+    })
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
+    investment_amount = 5.00 # This could be a configurable value
+
     if portfolio_name == 'main':
-        candidate_func = find_hot_stock
+        candidate_ticker = find_hot_stock('sp500')
     elif portfolio_name == 'monthly_dividend':
-        candidate_func = lambda: find_dividend_stock('monthly_dividend', MONTHLY_DIVIDEND_DATA_FILE)
+        candidate_ticker = find_dividend_stock('monthly_dividend')
     else:
         return jsonify({'status': 'error', 'message': 'Invalid portfolio name.'}), 404
-    success, message = execute_portfolio_investment(portfolio_name, candidate_func)
-    return jsonify({'status': 'success' if success else 'error', 'message': message})
+
+    if not candidate_ticker:
+        return jsonify({'status': 'error', 'message': f'No suitable stock found for {portfolio_name} portfolio investment.'})
+
+    try:
+        price = yf.Ticker(candidate_ticker).info.get('regularMarketPrice')
+        if not price or price <= 0: raise ValueError("Invalid price from yfinance")
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Could not fetch price for {candidate_ticker}: {e}"})
+
+    shares_to_buy = investment_amount / price
+    execute_investment(portfolio_name, candidate_ticker, shares_to_buy, price, investment_amount)
+
+    return jsonify({'status': 'success', 'message': f"Successfully invested ${investment_amount:.2f} in {candidate_ticker} for '{portfolio_name}' portfolio."})
 
 @app.route('/api/run-scraper', methods=['POST'])
-def run_scraper():
+def run_scraper_api():
     if request.headers.get('X-API-Key') != SCRAPER_API_KEY:
         abort(401, "Unauthorized: Invalid or missing API key.")
     try:
@@ -181,7 +190,25 @@ def run_scraper():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
 
+def initial_populate_db():
+    """Populates the DB with starter lists if they are empty."""
+    print("Checking if initial data population is needed...")
+    starter_lists = {
+        'sp500': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'JPM', 'JNJ', 'V', 'PG', 'NVDA'],
+        'penny': ['SNDL', 'CTRM', 'ZOM', 'GNUS', 'RIG', 'AMC', 'BB', 'NOK'],
+        'monthly_dividend': ['O', 'MAIN', 'GAIN', 'STAG', 'GOOD', 'PBA', 'SJR', 'AGNC'],
+        'high_yield': ['MO', 'T', 'VZ', 'IBM', 'XOM', 'CVX', 'KO', 'PEP', 'MCD', 'WMT']
+    }
+    for category, tickers in starter_lists.items():
+        if not get_tickers_by_category(category):
+            print(f"Adding starter list for '{category}'...")
+            # Using replace_tickers to ensure a clean slate for hardcoded lists
+            from database import replace_tickers_for_category
+            replace_tickers_for_category(tickers, category)
+
 if __name__ == '__main__':
-    init_db()
-    initial_populate_db()
+    # The database should be initialized and populated via a separate script now.
+    # See setup_database.py
+    # This ensures the web server starts quickly and doesn't perform lengthy setup tasks.
+    print("Starting Flask server...")
     app.run(debug=True, port=5001)

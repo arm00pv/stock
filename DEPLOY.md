@@ -1,6 +1,6 @@
-# Deployment Guide for Hot Stocks App with Apache2
+# Deployment Guide for Stock App with Apache2 and MySQL
 
-This guide provides step-by-step instructions for deploying the Hot Stocks Flask application on a Digital Ocean server running Ubuntu. The application will be served using **Apache2** as a reverse proxy and Gunicorn as the WSGI server.
+This guide provides step-by-step instructions for deploying the Stock Picker Flask application on a Digital Ocean server running Ubuntu. The application will be served using **Apache2** as a reverse proxy, Gunicorn as the WSGI server, and **MySQL** as the database.
 
 The application will be accessible at `https://zapp.sytes.net/stock/`.
 The application files will be located in `/var/www/webhost/stock/`.
@@ -10,54 +10,130 @@ The application files will be located in `/var/www/webhost/stock/`.
 - A Digital Ocean Droplet with Ubuntu 20.04 or later.
 - A non-root user with `sudo` privileges.
 - **Apache2** installed and running.
+- **MySQL Server** installed and running.
 - Python 3 and `pip` installed.
 
-## Step 1: Clone the Repository and Set Up the Environment
+## Step 1: Install and Configure MySQL
 
-1.  **SSH into your server:**
+If you don't have MySQL installed, follow these steps.
+
+1.  **Install MySQL Server:**
     ```bash
-    ssh your_user@zapp.sytes.net
+    sudo apt update
+    sudo apt install mysql-server
     ```
 
-2.  **Create the directory and clone the repository:**
+2.  **Secure Your MySQL Installation:**
+    Run the included security script. You'll be asked to set a root password and answer several security-related questions. It's recommended to answer 'yes' to all of them.
+    ```bash
+    sudo mysql_secure_installation
+    ```
+
+3.  **Allow Remote Connections (CRITICAL):**
+    By default, MySQL only listens for local connections. You must enable remote connections so the application can access it.
+    ```bash
+    sudo nano /etc/mysql/mysql.conf.d/mysqld.cnf
+    ```
+    Find the line `bind-address = 127.0.0.1` and change it to `bind-address = 0.0.0.0`.
+
+4.  **Configure Firewall:**
+    Allow incoming connections to the MySQL port (3306).
+    ```bash
+    sudo ufw allow 3306/tcp
+    ```
+
+5.  **Restart MySQL Service:**
+    ```bash
+    sudo systemctl restart mysql
+    ```
+
+## Step 2: Create the Database and User
+
+1.  **Log in to MySQL as root:**
+    ```bash
+    sudo mysql -u root -p
+    ```
+
+2.  **Run the following SQL commands** to create the database and a dedicated user for the application. Replace `'your_strong_password'` with a secure password.
+
+    ```sql
+    -- Create the database
+    CREATE DATABASE stocks_db;
+
+    -- Create the user for remote connections
+    CREATE USER 'stocks'@'%' IDENTIFIED BY 'your_strong_password';
+
+    -- Grant privileges to the new user on the new database
+    GRANT ALL PRIVILEGES ON stocks_db.* TO 'stocks'@'%';
+
+    -- Apply the changes
+    FLUSH PRIVILEGES;
+
+    -- Exit the MySQL prompt
+    EXIT;
+    ```
+
+## Step 3: Clone the Repository and Set Up the Environment
+
+1.  **Create the directory and clone the repository:**
     ```bash
     sudo mkdir -p /var/www/webhost/stock
     git clone <your-repo-url> /var/www/webhost/stock
     ```
 
-3.  **Set Directory Permissions:**
-    This is a crucial step. The Gunicorn process runs as the `www-data` user, so this user needs to own the application files.
+2.  **Set Directory Permissions:**
+    The Gunicorn process runs as the `www-data` user, so this user needs to own the application files.
     ```bash
     sudo chown -R www-data:www-data /var/www/webhost/stock
     ```
 
-4.  **Set up Python Environment:**
-    Change into the project directory:
+3.  **Set up Python Environment:**
     ```bash
     cd /var/www/webhost/stock
-    ```
-    Create a Python virtual environment and install dependencies:
-    ```bash
     python3 -m venv venv
     source venv/bin/activate
+
+    # Install system dependencies required for the MySQL connector
+    sudo apt-get install -y default-libmysqlclient-dev build-essential
+
+    # Install Python packages
     pip install -r requirements.txt
     pip install gunicorn
     ```
 
-## Step 2: Configure Gunicorn
+## Step 4: Set Up the Database Schema and Initial Data
 
-We will use `systemd` to manage the Gunicorn process.
+Run the included setup script to create the necessary tables and populate them with starter data.
+```bash
+# Make sure you are in the project directory and the virtual environment is activated
+cd /var/www/webhost/stock
+source venv/bin/activate
 
-1.  **Create a `systemd` service file:**
+python setup_database.py
+```
+
+## Step 5: Configure Gunicorn and Apache2
+
+This part of the setup remains largely the same.
+
+1.  **Create a `wsgi.py` file:**
+    ```bash
+    sudo nano wsgi.py
+    ```
+    Content:
+    ```python
+    from app import app
+    application = app
+    ```
+
+2.  **Create a `systemd` service file for Gunicorn:**
     ```bash
     sudo nano /etc/systemd/system/hotstocks.service
     ```
-
-2.  **Add the following content to the file.**
-
+    Content:
     ```ini
     [Unit]
-    Description=Gunicorn instance to serve Hot Stocks app
+    Description=Gunicorn instance to serve Stock App
     After=network.target
 
     [Service]
@@ -65,134 +141,52 @@ We will use `systemd` to manage the Gunicorn process.
     Group=www-data
     WorkingDirectory=/var/www/webhost/stock
     Environment="PATH=/var/www/webhost/stock/venv/bin"
-    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 3 --bind unix:hotstocks.sock -m 007 wsgi:application
+    # --- Application Configuration ---
+    # Set your secret API key for the scraper
+    Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE"
+    # Set the database connection details
+    Environment="DB_HOST=127.0.0.1" # Or your remote DB IP
+    Environment="DB_USER=stocks"
+    Environment="DB_PASSWORD=your_strong_password"
+    Environment="DB_NAME=stocks_db"
+
+    # With MySQL, we can safely use multiple workers
+    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 3 --timeout 120 --bind unix:hotstocks.sock -m 007 wsgi:application
 
     [Install]
     WantedBy=multi-user.target
     ```
+    **Note:** We can now use `--workers 3` since MySQL handles concurrent connections gracefully, unlike SQLite.
 
-3.  **Create a `wsgi.py` file** for Gunicorn to use:
-    ```bash
-    sudo nano wsgi.py # Use sudo as the directory is now owned by www-data
-    ```
-    Add the following content. This imports the Flask `app` object from your `app.py` file and assigns it to a variable named `application`, which Gunicorn expects.
-    ```python
-    from app import app
-
-    application = app
-    ```
-
-## Step 3: Configure Apache2
-
-You will add a proxy configuration to your existing Apache2 site.
-
-1.  **Enable the required Apache modules:**
-    This is a critical step. The configuration requires the `proxy`, `proxy_http`, and `headers` modules.
+3.  **Configure Apache2:**
+    Enable the required modules:
     ```bash
     sudo a2enmod proxy proxy_http headers
     sudo systemctl restart apache2
     ```
-
-2.  **Edit your existing Apache2 site configuration file:**
-    ```bash
-    sudo nano /etc/apache2/sites-enabled/webhost-le-ssl.conf
-    ```
-
-3.  **Add the proxy directives.** Inside the `<VirtualHost *:443>` block, add the following lines.
-
+    Edit your site configuration (`sudo nano /etc/apache2/sites-enabled/webhost-le-ssl.conf`) and add the proxy directives inside the `<VirtualHost *:443>` block:
     ```apache
-    # --- Configuration for Hot Stocks App ---
     ProxyPass /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
     ProxyPassReverse /stock/ unix:/var/www/webhost/stock/hotstocks.sock|http://localhost/
     RequestHeader set X-Forwarded-Prefix /stock
     ```
-    *Note: We are now using `X-Forwarded-Prefix`. This header works with the `ProxyFix` middleware in the Flask app to correctly handle the `/stock/` URL prefix.*
 
-4.  **Test the Apache2 configuration for syntax errors:**
+## Step 6: Start the Services
+
+1.  **Reload `systemd`, then start and enable the `hotstocks` service:**
     ```bash
-    sudo apache2ctl configtest
-    ```
-    If you see `Syntax OK`, you can proceed.
-
-## Step 4: Start and Enable the Services
-
-1.  **Start and enable the `hotstocks` service:**
-    ```bash
+    sudo systemctl daemon-reload
     sudo systemctl start hotstocks
     sudo systemctl enable hotstocks
     ```
 
-2.  **Restart Apache2 to apply the new configuration:**
+2.  **Restart Apache2:**
     ```bash
     sudo systemctl restart apache2
     ```
 
-## Step 5: Access Your Application
+## Step 7: Access Your Application
 
-You should now be able to access your application in your web browser at:
-`https://zapp.sytes.net/stock/`
+You should now be able to access your application at: `https://zapp.sytes.net/stock/`
 
-If you encounter any issues, you can check the logs for Apache2 and your application:
--   **Apache2 logs:** `sudo journalctl -u apache2` or check `/var/log/apache2/error.log`
--   **Application logs:** `sudo journalctl -u hotstocks`
-
----
-
-## Step 6 (Optional): Automate Data Scraping with n8n
-
-To keep the stock lists fresh, you can automate the scraper to run daily using your `n8n` server. This is a more robust and manageable solution than a traditional cron job.
-
-The application has a secure API endpoint specifically for this purpose. Your `n8n` workflow will send a request to this endpoint to trigger the scraping process.
-
-### 1. The Scraper Endpoint
-
--   **URL:** `https://zapp.sytes.net/stock/api/run-scraper`
--   **Method:** `POST`
--   **Security:** The endpoint is protected by a secret API key. You must include this key in the request headers.
-
-### 2. Set Your Secret API Key
-
-The default API key is `your-super-secret-key`. For security, you should change this.
-
-1.  **On your server**, open the `hotstocks.service` file:
-    ```bash
-    sudo nano /etc/systemd/system/hotstocks.service
-    ```
-2.  **Add an `Environment` variable** with your own secret key and set the final `ExecStart` command.
-    ```ini
-    [Service]
-    User=www-data
-    Group=www-data
-    WorkingDirectory=/var/www/webhost/stock
-    Environment="PATH=/var/www/webhost/stock/venv/bin"
-    Environment="SCRAPER_API_KEY=YOUR_REALLY_LONG_AND_SECRET_KEY_HERE"
-    ExecStart=/var/www/webhost/stock/venv/bin/gunicorn --workers 1 --timeout 120 --bind unix:hotstocks.sock -m 007 wsgi:application
-    ```
-    **Note on `--workers 1`:** Using a single worker is the recommended setup for applications using SQLite. It prevents multiple processes from trying to write to the database file at the same time, which can cause locking issues and freezes.
-3.  **Reload the services** to apply the change:
-    ```bash
-    sudo systemctl daemon-reload
-    sudo systemctl restart hotstocks
-    ```
-
-### 3. Create the n8n Workflow
-
-On your `n8n` server, create a new workflow with two nodes:
-
-**Node 1: Cron Trigger**
--   Add a **Cron** node.
--   Set the **Mode** to `Every Day`.
--   Set the **Hour** to `8`.
--   Set the **Minute** to `0`.
--   Set the **Timezone** to `America/New_York`.
-
-**Node 2: HTTP Request**
--   Add an **HTTP Request** node and connect it to the Cron node.
--   Set the **Method** to `POST`.
--   Set the **URL** to: `https://zapp.sytes.net/stock/api/run-scraper`
--   Under **Authentication**, select `Header Auth`.
--   In the **Name** field, enter `X-API-Key`.
--   In the **Value** field, enter the same secret key you set in the `hotstocks.service` file.
--   Enable the **"Ignore SSL Issues"** option if your server uses a self-signed certificate and you run into SSL errors.
-
-**Activate your workflow.** Now, every day at 8:00 AM New York time, `n8n` will automatically call your API and trigger the scraper to update the database.
+The automation setup for `n8n` remains the same as before. Just make sure to use the `SCRAPER_API_KEY` you set in the `hotstocks.service` file.
