@@ -18,6 +18,7 @@ from database import (
     get_recently_picked_tickers
 )
 from scraper import run_scraper_pipeline
+from utils import is_market_open
 
 app = Flask(__name__)
 
@@ -35,6 +36,44 @@ CATEGORIES = {
 }
 
 # --- Stock Finding Logic ---
+def find_best_candidate_from_all():
+    """
+    Finds a stock with 3+ days of positive growth from a combined list of all
+    stock categories ('sp500', 'penny').
+    """
+    # Combine tickers from all relevant stock categories
+    all_tickers = get_tickers_by_category('sp500') + get_tickers_by_category('penny')
+    unique_tickers = sorted(list(set(all_tickers))) # Sort for deterministic behavior
+
+    # We need to avoid picking any stock that was recently picked for ANY category
+    sp500_recent = get_recently_picked_tickers('sp500')
+    penny_recent = get_recently_picked_tickers('penny')
+    all_recent_picks = sp500_recent.union(penny_recent)
+
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+
+    for ticker in unique_tickers:
+        if ticker in all_recent_picks:
+            continue
+        try:
+            hist = yf.Ticker(ticker).history(start=start_date, end=end_date, auto_adjust=False)
+            if hist.empty or len(hist) < 4:
+                continue
+
+            # Check for 3 consecutive days of growth
+            if all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4)):
+                 return ticker
+        except Exception as e:
+            print(f"Could not analyze ticker {ticker} for daily portfolio: {e}")
+
+    # Fallback: if no stock meets the criteria, return the first one not picked recently
+    for ticker in unique_tickers:
+        if ticker not in all_recent_picks:
+            return ticker
+
+    return unique_tickers[0] if unique_tickers else None
+
 def find_hot_stock(category):
     recent_picks = get_recently_picked_tickers(category)
     tickers = get_tickers_by_category(category)
@@ -158,9 +197,21 @@ def portfolio_data(portfolio_name):
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
-    investment_amount = 5.00 # This could be a configurable value
+    investment_amount = 5.00  # This could be a configurable value
 
-    if portfolio_name == 'main':
+    # --- New Logic for Daily Portfolio ---
+    if portfolio_name == 'daily_investment':
+        if not is_market_open():
+            return jsonify({'status': 'success', 'message': 'Market is closed today. No investment made.'})
+
+        # For the daily portfolio, we find the best candidate from all lists
+        candidate_ticker = find_best_candidate_from_all()
+        # The daily pick should be saved under its own category to avoid re-picking
+        if candidate_ticker:
+            save_daily_pick('daily_investment_pick', candidate_ticker)
+
+    # --- Existing Logic for other portfolios ---
+    elif portfolio_name == 'main':
         candidate_ticker = find_hot_stock('sp500')
     elif portfolio_name == 'monthly_dividend':
         candidate_ticker = find_dividend_stock('monthly_dividend')
@@ -172,7 +223,8 @@ def trigger_investment(portfolio_name):
 
     try:
         price = yf.Ticker(candidate_ticker).info.get('regularMarketPrice')
-        if not price or price <= 0: raise ValueError("Invalid price from yfinance")
+        if not price or price <= 0:
+            raise ValueError("Invalid price from yfinance")
     except Exception as e:
         return jsonify({'status': 'error', 'message': f"Could not fetch price for {candidate_ticker}: {e}"})
 

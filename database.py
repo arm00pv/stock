@@ -40,7 +40,7 @@ def init_db():
     cursor.execute("CREATE TABLE IF NOT EXISTS portfolio_transactions (id INT AUTO_INCREMENT PRIMARY KEY, portfolio_name VARCHAR(50) NOT NULL, ticker VARCHAR(20) NOT NULL, shares DECIMAL(18, 8) NOT NULL, purchase_price DECIMAL(18, 4) NOT NULL, purchase_date DATE NOT NULL, FOREIGN KEY (portfolio_name) REFERENCES portfolio_summary(portfolio_name))")
     cursor.execute("CREATE TABLE IF NOT EXISTS daily_picks_history (pick_date DATE NOT NULL, category VARCHAR(50) NOT NULL, ticker VARCHAR(20) NOT NULL, PRIMARY KEY (pick_date, category))")
 
-    portfolios_to_init = ['main', 'monthly_dividend']
+    portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment']
     for p_name in portfolios_to_init:
         cursor.execute('SELECT COUNT(*) FROM portfolio_summary WHERE portfolio_name = %s', (p_name,))
         if cursor.fetchone()[0] == 0:

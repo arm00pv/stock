@@ -18,6 +18,7 @@
             <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Portfolio</button>
+            <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Portfolio</button>
         </div>
 
         <!-- Pick-based Tabs -->
@@ -58,6 +59,14 @@
             <div id="portfolio-summary-monthly_dividend">Loading...</div>
             <h2>Holdings</h2>
             <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <!-- New Daily Portfolio Tab -->
+        <div id="PortfolioDaily" class="tab-content">
+            <h1>$5 Daily Portfolio (Trading Days Only)</h1>
+            <div id="portfolio-summary-daily_investment">Loading...</div>
+            <h2>Holdings</h2>
+            <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
         </div>
     </div>
 
@@ -194,9 +203,10 @@
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
             populatePicks("{{ url_for('api_high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
 
-            // Load both portfolios on page load. It's simpler and more robust than click handlers.
+            // Load all portfolios on page load. It's simpler and more robust than click handlers.
             populatePortfolio('main');
             populatePortfolio('monthly_dividend');
+            populatePortfolio('daily_investment');
         });
     </script>
 </body>

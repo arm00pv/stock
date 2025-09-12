@@ -4,3 +4,4 @@ pandas
 requests
 beautifulsoup4
 mysql-connector-python
+pandas_market_calendars
