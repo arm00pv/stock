@@ -77,8 +77,10 @@
         }
 
         function createTickerLink(ticker) {
-            if (!ticker || ticker.includes('Error')) return ticker;
-            return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
+            if (!ticker || ticker.includes('Error') || ticker.includes('No suitable stock')) {
+                return `<span>${ticker}</span>`;
+            }
+            return `<a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>`;
         }
 
         function populatePicks(endpoint, dailyPickId, historicalPicksId) {
@@ -90,7 +92,7 @@
                 .then(data => {
                     if (data.error) throw new Error(data.error);
 
-                    dailyPickDiv.innerHTML = createTickerLink(data.ticker);
+                    dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}</h2>`;
 
                     historicalPicksUl.innerHTML = '';
                     if (data.history && data.history.length > 0) {
@@ -120,10 +122,18 @@
                     if (data.error) throw new Error(data.error);
 
                     summaryDiv.innerHTML = `
-                        <p><strong>Total Invested:</strong> $${data.total_invested.toFixed(2)}</p>
-                        <p><strong>Cash Balance:</strong> $${data.cash_balance.toFixed(2)}</p>
-                        <p><strong>Current Market Value:</strong> $${data.current_market_value.toFixed(2)}</p>
-                        <p><strong>Total Assets:</strong> $${data.total_assets.toFixed(2)}</p>
+                        <div class="portfolio-metric">
+                            <span class="label">Total Invested</span>
+                            <span class="value">$${data.total_invested.toFixed(2)}</span>
+                        </div>
+                        <div class="portfolio-metric">
+                            <span class="label">Market Value</span>
+                            <span class="value">$${data.current_market_value.toFixed(2)}</span>
+                        </div>
+                        <div class="portfolio-metric">
+                            <span class="label">Total Assets</span>
+                            <span class="value">$${data.total_assets.toFixed(2)}</span>
+                        </div>
                     `;
 
                     holdingsTableHead.innerHTML = `
@@ -156,19 +166,16 @@
 
         function startCountdown() {
             const countdownSpan = document.getElementById('countdown');
+            if (!countdownSpan) return;
             function update() {
                 const now = new Date();
                 const newYorkTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
                 let tomorrow = new Date(newYorkTime);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                tomorrow.setHours(8, 0, 0, 0);
 
                 if (newYorkTime.getHours() >= 8) {
-                    // It's past 8 AM, countdown to tomorrow
-                } else {
-                    // It's before 8 AM, countdown to today 8 AM
-                    tomorrow.setDate(tomorrow.getDate() - 1);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
                 }
+                tomorrow.setHours(8, 0, 0, 0);
 
                 const diff = tomorrow.getTime() - newYorkTime.getTime();
                 const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -187,12 +194,9 @@
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');
             populatePicks("{{ url_for('api_high_yield_dividend_stock') }}", 'high-yield-daily-pick', 'high-yield-historical-picks');
 
-            // Add event listeners to portfolio tabs to load data when they are clicked
-            document.querySelector('button[onclick*="PortfolioMain"]').addEventListener('click', () => populatePortfolio('main'));
-            document.querySelector('button[onclick*="PortfolioMonthly"]').addEventListener('click', () => populatePortfolio('monthly_dividend'));
-
-            // Initial load for the main portfolio since it's the default visible one
+            // Load both portfolios on page load. It's simpler and more robust than click handlers.
             populatePortfolio('main');
+            populatePortfolio('monthly_dividend');
         });
     </script>
 </body>
