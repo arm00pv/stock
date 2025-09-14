@@ -215,6 +215,8 @@ def trigger_investment(portfolio_name):
         candidate_ticker = find_hot_stock('sp500')
     elif portfolio_name == 'monthly_dividend':
         candidate_ticker = find_dividend_stock('monthly_dividend')
+    elif portfolio_name == 'high_yield_investment':
+        candidate_ticker = find_dividend_stock('high_yield')
     else:
         return jsonify({'status': 'error', 'message': 'Invalid portfolio name.'}), 404
 

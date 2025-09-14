@@ -19,6 +19,7 @@
             <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Portfolio</button>
+            <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
         </div>
 
         <!-- Pick-based Tabs -->
@@ -65,6 +66,14 @@
             <div id="portfolio-summary-daily_investment">Loading...</div>
             <h2>Holdings</h2>
             <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <!-- New High Yield Portfolio Tab -->
+        <div id="PortfolioHighYield" class="tab-content">
+            <h1>$5 a Week High Yield Portfolio</h1>
+            <div id="portfolio-summary-high_yield_investment">Loading...</div>
+            <h2>Holdings</h2>
+            <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
         </div>
     </div>
 
@@ -215,6 +224,7 @@
             populatePortfolio('main');
             populatePortfolio('monthly_dividend');
             populatePortfolio('daily_investment');
+            populatePortfolio('high_yield_investment');
         });
     </script>
 </body>
