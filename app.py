@@ -17,6 +17,7 @@ from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
 from performance_tracker import run_performance_check
 from utils import is_market_open
+from cache import get as get_from_cache, set as set_in_cache
 
 app = Flask(__name__)
 
@@ -143,14 +144,26 @@ def portfolio_data(portfolio_name):
     total_value = 0
     detailed_holdings = []
     for holding in holdings:
-        try:
-            current_price = yf.Ticker(holding['ticker']).info.get('regularMarketPrice', holding['purchase_price'])
-            value = holding['shares'] * current_price
-            total_value += value
-            detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
-        except Exception:
-            total_value += holding['shares'] * holding['purchase_price']
-            detailed_holdings.append({**holding, 'current_price': holding['purchase_price'], 'current_value': holding['shares'] * holding['purchase_price']})
+        ticker = holding['ticker']
+        current_price = get_from_cache(ticker)
+
+        if current_price is None:
+            try:
+                print(f"CACHE MISS for {ticker}, fetching from API...")
+                current_price = yf.Ticker(ticker).info.get('regularMarketPrice')
+                if current_price:
+                    set_in_cache(ticker, current_price)
+                else:
+                    current_price = holding['purchase_price'] # Fallback
+            except Exception:
+                current_price = holding['purchase_price'] # Fallback on error
+        else:
+            print(f"CACHE HIT for {ticker}")
+
+        value = holding['shares'] * current_price
+        total_value += value
+        detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+
     return jsonify({'portfolio_name': portfolio_name, 'cash_balance': summary[0], 'total_invested': summary[1], 'current_market_value': total_value, 'total_assets': summary[0] + total_value, 'holdings': detailed_holdings})
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])

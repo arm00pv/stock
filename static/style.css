@@ -158,3 +158,32 @@ h1, h2 {
     vertical-align: super;
     margin-left: 5px;
 }
+
+.positive-return {
+    color: #28a745;
+}
+
+.negative-return {
+    color: #dc3545;
+}
+
+/* Loading Spinner Styles */
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border-left-color: #0056b3;
+    margin: 20px auto;
+
+    animation: spin 1s ease infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
