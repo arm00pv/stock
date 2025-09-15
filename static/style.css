@@ -151,3 +151,10 @@ h1, h2 {
     line-height: 1;
     vertical-align: middle;
 }
+
+.sentiment-star {
+    color: #28a745; /* Green */
+    font-size: 1em;
+    vertical-align: super;
+    margin-left: 5px;
+}
