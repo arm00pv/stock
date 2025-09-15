@@ -1,6 +1,9 @@
 import os
+from dotenv import load_dotenv
 import requests
 from collections import defaultdict
+
+load_dotenv()
 from database import get_portfolio_holdings, set_sell_flag
 
 # --- Configuration ---

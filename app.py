@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from datetime import datetime, timedelta
+
+load_dotenv()
 import yfinance as yf
 import pandas as pd
 from flask import Flask, render_template, jsonify, request, abort
