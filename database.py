@@ -23,7 +23,19 @@ def init_db():
     conn = get_db_connection()
     if not conn: return
     cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS stocks (ticker VARCHAR(20) NOT NULL, category VARCHAR(50) NOT NULL, date_added DATE NOT NULL, source_url VARCHAR(255), last_seen_date DATE, PRIMARY KEY (ticker, category))")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stocks (
+            ticker VARCHAR(20) NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            date_added DATE NOT NULL,
+            source_url VARCHAR(255),
+            last_seen_date DATE,
+            market_cap BIGINT NULL,
+            sector VARCHAR(255) NULL,
+            is_sp500 TINYINT(1) DEFAULT 0,
+            PRIMARY KEY (ticker, category)
+        )
+    """)
     cursor.execute("CREATE TABLE IF NOT EXISTS portfolio_summary (portfolio_name VARCHAR(50) PRIMARY KEY, cash_balance DECIMAL(18, 4) NOT NULL, total_invested DECIMAL(18, 4) NOT NULL)")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS portfolio_transactions (

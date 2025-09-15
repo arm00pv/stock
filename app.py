@@ -16,6 +16,7 @@ from database import (
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
 from performance_tracker import run_performance_check
+from enricher import run_enrichment
 from utils import is_market_open
 from cache import get as get_from_cache, set as set_in_cache
 
@@ -220,5 +221,14 @@ def run_performance_tracker_api():
     try:
         run_performance_check()
         return jsonify({'status': 'success', 'message': 'Performance tracking executed successfully.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
+
+@app.route('/api/run-enrichment', methods=['POST'])
+def run_enrichment_api():
+    if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
+    try:
+        run_enrichment()
+        return jsonify({'status': 'success', 'message': 'Data enrichment executed successfully.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
