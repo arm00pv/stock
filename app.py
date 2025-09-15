@@ -41,8 +41,8 @@ def find_best_candidate_from_all():
     Finds a stock with 3+ days of positive growth from a combined list of all
     stock categories ('sp500', 'penny').
     """
-    # Combine tickers from all relevant stock categories
-    all_tickers = get_tickers_by_category('sp500') + get_tickers_by_category('penny')
+    # Combine tickers from all relevant stock and ETF categories
+    all_tickers = get_tickers_by_category('sp500') + get_tickers_by_category('penny') + get_tickers_by_category('etf')
     unique_tickers = sorted(list(set(all_tickers))) # Sort for deterministic behavior
 
     # We need to avoid picking any stock that was recently picked for ANY category
