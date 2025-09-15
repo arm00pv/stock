@@ -3,102 +3,92 @@ from bs4 import BeautifulSoup
 import re
 import time
 import csv
-from database import init_db, update_tickers_from_source, prune_old_tickers
+from database import init_db, update_tickers_from_source, get_tickers_by_category, prune_old_tickers
 
-# --- Alpha Vantage ETF Loader ---
-def load_etfs_from_alphavantage():
+def get_all_existing_tickers():
+    """Fetches all tickers currently in the database across all categories."""
+    all_tickers = set()
+    # Assuming get_tickers_by_category can be called for all existing categories
+    # A more robust way might be a direct SQL query, but this works for now.
+    categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'etf', 'generic_stock', 'bond']
+    for category in categories:
+        all_tickers.update(get_tickers_by_category(category))
+    return all_tickers
+
+def load_securities_from_alphavantage():
     """
-    Parses the local etf_list.csv file from Alpha Vantage and returns a list of ETF tickers.
+    Parses the local etf_list.csv, identifies new stocks, ETFs, and bonds,
+    and returns them as separate lists.
     """
-    print("--- Loading ETFs from Alpha Vantage file ---")
-    etf_tickers = []
+    print("--- Loading new securities from Alpha Vantage file ---")
+
+    try:
+        existing_tickers = get_all_existing_tickers()
+        print(f"Found {len(existing_tickers)} existing tickers in the database.")
+    except Exception as e:
+        print(f"Could not fetch existing tickers from DB, proceeding without check. Error: {e}")
+        existing_tickers = set()
+
+    new_stocks, new_etfs, new_bonds = [], [], []
+
     try:
         with open('etf_list.csv', mode='r', encoding='utf-8') as infile:
             reader = csv.DictReader(infile)
             for row in reader:
-                # We only want active ETFs
-                if row.get('assetType') == 'ETF' and row.get('status') == 'Active':
-                    etf_tickers.append(row['symbol'])
-        print(f"Found {len(etf_tickers)} active ETF tickers in the file.")
-        return etf_tickers
+                symbol = row.get('symbol')
+                if not symbol or symbol in existing_tickers:
+                    continue
+
+                asset_type = row.get('assetType')
+                name = row.get('name', '').lower()
+                status = row.get('status')
+
+                if status != 'Active':
+                    continue
+
+                if asset_type == 'Stock':
+                    new_stocks.append(symbol)
+                elif asset_type == 'ETF':
+                    if 'bond' in name or 'treasury' in name or 'fixed income' in name:
+                        new_bonds.append(symbol)
+                    else:
+                        new_etfs.append(symbol)
+
+        print(f"Found {len(new_stocks)} new stocks.")
+        print(f"Found {len(new_etfs)} new equity ETFs.")
+        print(f"Found {len(new_bonds)} new bond ETFs.")
+
+        return new_stocks, new_etfs, new_bonds
+
     except FileNotFoundError:
         print("Error: etf_list.csv not found. Please download it first.")
-        return []
+        return [], [], []
     except Exception as e:
-        print(f"An error occurred while parsing the ETF list: {e}")
-        return []
-
-# --- Parser for simplysafedividends.com ---
-def parse_simplysafedividends(soup):
-    all_tickers = set()
-    ticker_regex = re.compile(r'\(([A-Z]{1,5})\)')
-    content = soup.find('div', class_='trix-content')
-    if not content:
-        print("Error (simplysafedividends): Could not find the main content div.")
-        return set()
-    # ... (rest of the function is unchanged)
-    return all_tickers
-
-# --- Parser for kiplinger.com ---
-def parse_kiplinger(soup):
-    # ... (function is unchanged)
-    return set()
-
-# --- Generic Scraper ---
-def scrape_website(url, parser_func):
-    print(f"Attempting to scrape source: {url}")
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-    try:
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        return parser_func(soup)
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching URL {url}: {e}")
-        return None
+        print(f"An error occurred while parsing the securities list: {e}")
+        return [], [], []
 
 # --- Main Execution ---
 def run_scraper_pipeline():
     """
-    Runs the full pipeline: initializes DB, loads ETFs, scrapes all sources, and prunes old entries.
+    Runs the full pipeline to enrich the database with new securities.
     """
     init_db()
-    print("--- Starting Scraper Pipeline ---")
+    print("--- Starting Data Enrichment Pipeline ---")
 
-    # Step 1: Load ETFs from Alpha Vantage file
-    etf_tickers = load_etfs_from_alphavantage()
-    if etf_tickers:
-        update_tickers_from_source(etf_tickers, 'etf', 'https://www.alphavantage.co')
+    # Step 1: Load new securities from Alpha Vantage file
+    new_stocks, new_etfs, new_bonds = load_securities_from_alphavantage()
 
-    # Step 2: Scrape other web sources
-    sources = [
-        {
-            "category": "monthly_dividend",
-            "url": "https://www.simplysafedividends.com/world-of-dividends/posts/42-2025-monthly-dividend-stocks-list-all-76-ranked-and-analyzed",
-            "parser": parse_simplysafedividends
-        },
-        {
-            "category": "high_yield",
-            "url": "https://www.kiplinger.com/investing/stocks-with-the-highest-dividend-yields-in-the-sandp-500",
-            "parser": parse_kiplinger
-        }
-    ]
+    if new_stocks:
+        update_tickers_from_source(new_stocks, 'generic_stock', 'https://www.alphavantage.co')
+    if new_etfs:
+        update_tickers_from_source(new_etfs, 'etf', 'https://www.alphavantage.co')
+    if new_bonds:
+        update_tickers_from_source(new_bonds, 'bond', 'https://www.alphavantage.co')
 
-    for source in sources:
-        print(f"\n--- Processing: {source['category']} from {source['url']} ---")
-        scraped_tickers = scrape_website(source['url'], source['parser'])
+    # Note: Web scraping for other sources is disabled for this focused task.
+    # We can re-enable it later if needed.
 
-        if scraped_tickers is not None and len(scraped_tickers) > 0:
-            update_tickers_from_source(list(scraped_tickers), source['category'], source['url'])
-        else:
-            print(f"Scraping failed or returned no tickers for source: {source['url']}. No updates will be made from this source.")
-
-        time.sleep(3)
-
-    # Step 3: Prune old tickers
-    print("\n--- Pruning old tickers ---")
-    prune_old_tickers(days_old=90)
-    print("\n--- Scraper Pipeline Finished ---")
+    print("\n--- Data Enrichment Pipeline Finished ---")
 
 if __name__ == '__main__':
     run_scraper_pipeline()
