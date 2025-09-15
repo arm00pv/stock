@@ -144,3 +144,10 @@ h1, h2 {
 #portfolio-holdings tbody tr:nth-child(even) {
     background-color: #f2f2f2;
 }
+
+.sell-flag {
+    color: #dc3545; /* Bootstrap's danger red */
+    font-size: 1.5em;
+    line-height: 1;
+    vertical-align: middle;
+}

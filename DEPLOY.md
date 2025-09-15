@@ -189,4 +189,39 @@ This part of the setup remains largely the same.
 
 You should now be able to access your application at: `https://zapp.sytes.net/stock/`
 
-The automation setup for `n8n` remains the same as before. Just make sure to use the `SCRAPER_API_KEY` you set in the `hotstocks.service` file.
+## Step 8: Configure Automation
+
+The application has several automated tasks that should be run on a schedule using a tool like `n8n` or `cron`.
+
+### API Keys
+
+You will need to set the following Environment variables in your `hotstocks.service` file.
+
+-   `SCRAPER_API_KEY`: A secret key to protect the scraper endpoint.
+-   `MARKETAUX_API_KEY`: Your API key from [Marketaux.com](https://www.marketaux.com/) for sentiment analysis.
+
+Example `[Service]` section in `/etc/systemd/system/hotstocks.service`:
+```ini
+[Service]
+# ... other settings
+Environment="SCRAPER_API_KEY=YOUR_SUPER_SECRET_KEY"
+Environment="MARKETAUX_API_KEY=YOUR_MARKETAUX_KEY"
+Environment="DB_HOST=127.0.0.1"
+# ... etc
+```
+Remember to run `sudo systemctl daemon-reload` and `sudo systemctl restart hotstocks` after editing this file.
+
+### Recommended n8n Workflows
+
+1.  **Data Enrichment (Daily):**
+    *   **Trigger:** Cron node, runs once daily (e.g., at 1 AM).
+    *   **Action:** HTTP Request node, `POST` to `https://zapp.sytes.net/stock/api/run-scraper`. This will add new stocks/ETFs from Alpha Vantage.
+    *   **Authentication:** Use the `SCRAPER_API_KEY`.
+
+2.  **Sentiment Analysis (Hourly):**
+    *   **Trigger:** Cron node, runs once every hour.
+    *   **Action:** HTTP Request node, `POST` to `https://zapp.sytes.net/stock/api/run-sentiment-analysis`. This will update the sell flags on your current holdings.
+    *   **Authentication:** Use the `SCRAPER_API_KEY`.
+
+3.  **Portfolio Investments (Weekly/Daily):**
+    *   Set up separate workflows for each portfolio (`main`, `monthly_dividend`, `high_yield_investment`, `daily_investment`) with the desired schedule, as discussed previously.

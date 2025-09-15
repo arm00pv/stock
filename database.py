@@ -37,7 +37,18 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS stocks (ticker VARCHAR(20) NOT NULL, category VARCHAR(50) NOT NULL, date_added DATE NOT NULL, source_url VARCHAR(255), last_seen_date DATE, PRIMARY KEY (ticker, category))")
     cursor.execute("CREATE TABLE IF NOT EXISTS portfolio_summary (portfolio_name VARCHAR(50) PRIMARY KEY, cash_balance DECIMAL(18, 4) NOT NULL, total_invested DECIMAL(18, 4) NOT NULL)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS portfolio_transactions (id INT AUTO_INCREMENT PRIMARY KEY, portfolio_name VARCHAR(50) NOT NULL, ticker VARCHAR(20) NOT NULL, shares DECIMAL(18, 8) NOT NULL, purchase_price DECIMAL(18, 4) NOT NULL, purchase_date DATE NOT NULL, FOREIGN KEY (portfolio_name) REFERENCES portfolio_summary(portfolio_name))")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            portfolio_name VARCHAR(50) NOT NULL,
+            ticker VARCHAR(20) NOT NULL,
+            shares DECIMAL(18, 8) NOT NULL,
+            purchase_price DECIMAL(18, 4) NOT NULL,
+            purchase_date DATE NOT NULL,
+            sell_flag TINYINT(1) DEFAULT 0,
+            FOREIGN KEY (portfolio_name) REFERENCES portfolio_summary(portfolio_name)
+        )
+    """)
     cursor.execute("CREATE TABLE IF NOT EXISTS daily_picks_history (pick_date DATE NOT NULL, category VARCHAR(50) NOT NULL, ticker VARCHAR(20) NOT NULL, PRIMARY KEY (pick_date, category))")
 
     portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
@@ -183,11 +194,33 @@ def get_portfolio_holdings(portfolio_name):
     conn = get_db_connection()
     if not conn: return []
     cursor = conn.cursor()
-    cursor.execute('SELECT ticker, shares, purchase_price, purchase_date FROM portfolio_transactions WHERE portfolio_name = %s ORDER BY purchase_date DESC', (portfolio_name,))
+    cursor.execute('''
+        SELECT ticker, shares, purchase_price, purchase_date, sell_flag
+        FROM portfolio_transactions
+        WHERE portfolio_name = %s
+        ORDER BY purchase_date DESC
+    ''', (portfolio_name,))
     holdings = cursor.fetchall()
     cursor.close()
     conn.close()
-    return [{'ticker': h[0], 'shares': float(h[1]), 'purchase_price': float(h[2]), 'purchase_date': h[3].strftime('%Y-%m-%d')} for h in holdings]
+    return [{'ticker': h[0], 'shares': float(h[1]), 'purchase_price': float(h[2]), 'purchase_date': h[3].strftime('%Y-%m-%d'), 'sell_flag': h[4]} for h in holdings]
+
+def set_sell_flag(ticker, flag_value):
+    """Sets the sell_flag for all transactions of a given ticker."""
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = "UPDATE portfolio_transactions SET sell_flag = %s WHERE ticker = %s"
+        cursor.execute(sql, (1 if flag_value else 0, ticker))
+        conn.commit()
+        print(f"Set sell_flag for {ticker} to {flag_value}. Matched {cursor.rowcount} rows.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"Database error while setting sell_flag for {ticker}: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 def execute_investment(portfolio_name, ticker, shares, price, investment_amount):
     conn = get_db_connection()
@@ -196,32 +229,22 @@ def execute_investment(portfolio_name, ticker, shares, price, investment_amount)
     try:
         cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE portfolio_name = %s FOR UPDATE', (portfolio_name,))
         cash, total_invested = cursor.fetchone()
-
-        # Convert all inputs to Decimal for precision
         dec_investment = Decimal(str(investment_amount))
         dec_shares = Decimal(str(shares))
         dec_price = Decimal(str(price))
-
-        # Perform calculations with Decimal objects
         new_cash = cash + dec_investment
         new_total_invested = total_invested + dec_investment
         cost = dec_shares * dec_price
         new_cash -= cost
-
         today_str = datetime.now().strftime('%Y-%m-%d')
-
-        # Insert the transaction with high-precision values
         cursor.execute('''
             INSERT INTO portfolio_transactions (portfolio_name, ticker, shares, purchase_price, purchase_date)
             VALUES (%s, %s, %s, %s, %s)
         ''', (portfolio_name, ticker, dec_shares, dec_price, today_str))
-
-        # Update the summary
         cursor.execute(
             'UPDATE portfolio_summary SET cash_balance = %s, total_invested = %s WHERE portfolio_name = %s',
             (new_cash, new_total_invested, portfolio_name)
         )
-
         conn.commit()
         print(f"Successfully executed investment for '{portfolio_name}': Bought {dec_shares} shares of {ticker} at ${dec_price}")
     except (mysql.connector.Error, InvalidOperation) as e:

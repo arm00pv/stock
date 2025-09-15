@@ -163,15 +163,17 @@
 
                     holdingsTableHead.innerHTML = `
                         <tr>
-                            <th>Ticker</th><th>Shares</th><th>Purchase Price</th>
+                            <th>Ticker</th><th>Flag</th><th>Shares</th><th>Purchase Price</th>
                             <th>Purchase Date</th><th>Current Price</th><th>Current Value</th>
                         </tr>`;
                     holdingsTableBody.innerHTML = '';
                     if (data.holdings && data.holdings.length > 0) {
                         data.holdings.forEach(h => {
                             const row = holdingsTableBody.insertRow();
+                            const flag_html = h.sell_flag ? '<span class="sell-flag">●</span>' : '';
                             row.innerHTML = `
                                 <td>${createTickerLink(h.ticker)}</td>
+                                <td style="text-align: center;">${flag_html}</td>
                                 <td>${h.shares.toFixed(6)}</td>
                                 <td>$${h.purchase_price.toFixed(2)}</td>
                                 <td>${h.purchase_date}</td>
@@ -180,7 +182,7 @@
                             `;
                         });
                     } else {
-                        holdingsTableBody.innerHTML = `<tr><td colspan="6">No holdings yet.</td></tr>`;
+                        holdingsTableBody.innerHTML = `<tr><td colspan="7">No holdings yet.</td></tr>`;
                     }
                 })
                 .catch(error => {

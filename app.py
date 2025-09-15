@@ -18,6 +18,7 @@ from database import (
     get_recently_picked_tickers
 )
 from scraper import run_scraper_pipeline
+from sentiment_analyzer import run_sentiment_analysis
 from utils import is_market_open
 
 app = Flask(__name__)
@@ -238,5 +239,15 @@ def run_scraper_api():
     try:
         run_scraper_pipeline()
         return jsonify({'status': 'success', 'message': 'Scraper pipeline executed successfully.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
+
+@app.route('/api/run-sentiment-analysis', methods=['POST'])
+def run_sentiment_analysis_api():
+    if request.headers.get('X-API-Key') != SCRAPER_API_KEY:
+        abort(401, "Unauthorized: Invalid or missing API key.")
+    try:
+        run_sentiment_analysis()
+        return jsonify({'status': 'success', 'message': 'Sentiment analysis executed successfully.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
