@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
-# import yfinance as yf
-# import pandas as pd
+import yfinance as yf
+import pandas as pd
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -10,9 +10,9 @@ from database import (
     execute_investment, save_daily_pick, get_pick_history_for_category,
     get_todays_pick_for_category, get_recently_picked_tickers
 )
-# from scraper import run_scraper_pipeline
-# from sentiment_analyzer import get_sentiment_for_tickers
-# from utils import is_market_open
+from scraper import run_scraper_pipeline
+from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
+from utils import is_market_open
 
 app = Flask(__name__)
 
@@ -191,7 +191,6 @@ def run_scraper_api():
 @app.route('/api/run-sentiment-analysis', methods=['POST'])
 def run_sentiment_analysis_api():
     if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
-    from sentiment_analyzer import run_sentiment_analysis
     try:
         run_sentiment_analysis()
         return jsonify({'status': 'success', 'message': 'Sentiment analysis executed successfully.'})
