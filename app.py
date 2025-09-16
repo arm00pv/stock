@@ -4,6 +4,9 @@ import yfinance as yf
 import pandas as pd
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from database import (
     init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
@@ -13,6 +16,7 @@ from database import (
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
 from performance_tracker import run_performance_check
+from enricher import run_enrichment
 from utils import is_market_open
 from cache import get as get_from_cache, set as set_in_cache
 
@@ -30,22 +34,15 @@ POSITIVE_SENTIMENT_THRESHOLD = 0.2
 
 # --- Categories ---
 CATEGORIES = {
-    'hot_stock': {
-        'db_categories': ['sp500', 'generic_stock', 'etf'],
-        'display_name': 'Hot Picks'
-    },
-    'penny_stock': {
-        'db_categories': ['penny', 'etf', 'generic_stock'],
-        'display_name': '$5 or Less',
-        'price_limit': 5
-    },
+    'hot_stock': { 'db_categories': ['sp500', 'generic_stock', 'etf'], 'display_name': 'Hot Picks' },
+    'penny_stock': { 'db_categories': ['penny', 'etf', 'generic_stock'], 'display_name': '$5 or Less', 'price_limit': 5 },
     'monthly_dividend': {'db_category': 'monthly_dividend', 'display_name': 'Monthly Dividends'},
     'high_yield_dividend': {'db_category': 'high_yield', 'display_name': 'High-Yield Dividends'}
 }
 
 # --- Stock Finding Logic ---
 def find_growth_candidate(categories_to_search, price_limit=None):
-    print(f"Searching for growth candidate in categories: {categories_to_search}, price_limit: {price_limit}")
+    print(f"Searching for growth candidate in {categories_to_search} with price limit {price_limit}")
     all_tickers = []
     for category in categories_to_search:
         all_tickers.extend(get_tickers_by_category(category))
@@ -55,8 +52,7 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     for category in all_history_categories:
         recent_picks.update(get_recently_picked_tickers(category))
 
-    # --- Tier 1: Golden Cross + Volume ---
-    print("--- Tier 1: Searching for Golden Cross candidates ---")
+    # Tier 1: Golden Cross
     technical_candidates = []
     for ticker in unique_tickers:
         if ticker in recent_picks: continue
@@ -81,18 +77,15 @@ def find_growth_candidate(categories_to_search, price_limit=None):
         sentiment_candidates = [{'ticker': t, 'sentiment': sentiment_scores.get(t, 0)} for t in technical_candidates]
         sentiment_candidates.sort(key=lambda x: x['sentiment'], reverse=True)
         if sentiment_candidates[0]['sentiment'] >= POSITIVE_SENTIMENT_THRESHOLD:
-            print(f"Found Golden Cross candidate with high sentiment: {sentiment_candidates[0]}")
             return sentiment_candidates[0]
 
-    # --- Tier 2: 3-Day Growth ---
-    print("--- Tier 2: No Golden Cross found. Searching for 3-Day Growth candidates ---")
+    # Tier 2: 3-Day Growth
     three_day_candidates = []
     for ticker in unique_tickers:
         if ticker in recent_picks: continue
         try:
             if price_limit:
-                # Re-fetch info if needed, or assume it's okay for this simpler check
-                pass
+                pass # Price already checked if it was a technical candidate
             hist = yf.Ticker(ticker).history(period="7d")
             if len(hist) < 4: continue
             if all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4)):
@@ -100,19 +93,9 @@ def find_growth_candidate(categories_to_search, price_limit=None):
         except Exception: pass
 
     if three_day_candidates:
-        sentiment_scores = get_sentiment_for_tickers(three_day_candidates)
-        sentiment_candidates = [{'ticker': t, 'sentiment': sentiment_scores.get(t, 0)} for t in three_day_candidates]
-        sentiment_candidates.sort(key=lambda x: x['sentiment'], reverse=True)
-        if sentiment_candidates[0]['sentiment'] >= POSITIVE_SENTIMENT_THRESHOLD:
-            print(f"Found 3-Day Growth candidate with high sentiment: {sentiment_candidates[0]}")
-            return sentiment_candidates[0]
+        return {'ticker': three_day_candidates[0], 'sentiment': None}
 
-    # --- Tier 3: Fallback ---
-    print("--- Tier 3: No candidates with positive sentiment found. Falling back. ---")
-    all_candidates = technical_candidates + three_day_candidates
-    for ticker in all_candidates:
-        if ticker not in recent_picks:
-            return {'ticker': ticker, 'sentiment': None}
+    # Tier 3: Fallback
     for ticker in unique_tickers:
         if ticker not in recent_picks:
             return {'ticker': ticker, 'sentiment': None}
@@ -121,10 +104,7 @@ def find_growth_candidate(categories_to_search, price_limit=None):
 
 def find_hot_stock(category_key):
     details = CATEGORIES.get(category_key, {})
-    return find_growth_candidate(
-        categories_to_search=details.get('db_categories', []),
-        price_limit=details.get('price_limit')
-    )
+    return find_growth_candidate(categories_to_search=details.get('db_categories', []), price_limit=details.get('price_limit'))
 
 def find_best_candidate_from_all():
     return find_growth_candidate(categories_to_search=['sp500', 'penny', 'etf', 'generic_stock'])
@@ -138,7 +118,8 @@ def find_dividend_stock(category):
     return {'ticker': tickers[0] if tickers else None, 'sentiment': None}
 
 def get_daily_pick_response(category_key):
-    db_category = CATEGORIES[category_key]['db_categories'][0] # Use first category as primary
+    details = CATEGORIES[category_key]
+    db_category = details['db_categories'][0]
     try:
         todays_pick = get_todays_pick_for_category(db_category)
         if todays_pick:
@@ -149,10 +130,8 @@ def get_daily_pick_response(category_key):
             if stock_ticker: save_daily_pick(db_category, stock_ticker, sentiment)
         history = get_pick_history_for_category(db_category)
         return jsonify({'ticker': stock_ticker or 'No suitable stock found today.', 'history': history})
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ticker': 'Error loading data.', 'history': []}), 500
+    except Exception as e:
+        return jsonify({'ticker': f'Error: {e}', 'history': []}), 500
 
 # --- API Endpoints ---
 @app.route('/')
@@ -168,25 +147,68 @@ def api_high_yield_dividend_stock(): return get_daily_pick_response('high_yield_
 
 @app.route('/api/portfolio/<portfolio_name>')
 def portfolio_data(portfolio_name):
-    # ... (code is correct from previous version) ...
-    pass
+    summary = get_portfolio_summary(portfolio_name)
+    holdings = get_portfolio_holdings(portfolio_name)
+    total_value = 0
+    detailed_holdings = []
+    for holding in holdings:
+        ticker = holding['ticker']
+        current_price = get_from_cache(ticker)
+        if current_price is None:
+            try:
+                current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
+                if current_price: set_in_cache(ticker, current_price)
+            except Exception:
+                current_price = holding['purchase_price']
+        value = holding['shares'] * current_price
+        total_value += value
+        detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+    return jsonify({'portfolio_name': portfolio_name, 'cash_balance': summary[0], 'total_invested': summary[1], 'current_market_value': total_value, 'total_assets': summary[0] + total_value, 'holdings': detailed_holdings})
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
-    # ... (code is correct from previous version) ...
-    pass
+    investment_amount = 5.00
+    result = None
+    if portfolio_name == 'daily_investment':
+        if not is_market_open(): return jsonify({'status': 'success', 'message': 'Market is closed today. No investment made.'})
+        result = find_best_candidate_from_all()
+        if result and result.get('ticker'): save_daily_pick('daily_investment_pick', result['ticker'], result.get('sentiment'))
+    elif portfolio_name == 'main':
+        result = find_hot_stock('hot_stock')
+    elif portfolio_name == 'monthly_dividend':
+        result = find_dividend_stock('monthly_dividend')
+    elif portfolio_name == 'high_yield_investment':
+        result = find_dividend_stock('high_yield')
+    else:
+        return jsonify({'status': 'error', 'message': 'Invalid portfolio name.'}), 404
+
+    candidate_ticker = result.get('ticker') if result else None
+    if not candidate_ticker: return jsonify({'status': 'error', 'message': f'No suitable stock found for {portfolio_name} portfolio investment.'})
+
+    try:
+        price = yf.Ticker(candidate_ticker).info.get('regularMarketPrice')
+        if not price or price <= 0: raise ValueError("Invalid price")
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f"Could not fetch price for {candidate_ticker}: {e}"})
+
+    shares_to_buy = investment_amount / price
+    execute_investment(portfolio_name, candidate_ticker, shares_to_buy, price, investment_amount)
+    return jsonify({'status': 'success', 'message': f"Successfully invested ${investment_amount:.2f} in {candidate_ticker} for '{portfolio_name}' portfolio."})
 
 @app.route('/api/run-scraper', methods=['POST'])
 def run_scraper_api():
-    # ... (code is correct from previous version) ...
-    pass
+    if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
+    try: run_scraper_pipeline(); return jsonify({'status': 'success', 'message': 'Scraper executed.'})
+    except Exception as e: return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
 
 @app.route('/api/run-sentiment-analysis', methods=['POST'])
 def run_sentiment_analysis_api():
-    # ... (code is correct from previous version) ...
-    pass
+    if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
+    try: run_sentiment_analysis(); return jsonify({'status': 'success', 'message': 'Sentiment analysis executed.'})
+    except Exception as e: return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
 
 @app.route('/api/run-enrichment', methods=['POST'])
 def run_enrichment_api():
-    # ... (code is correct from previous version) ...
-    pass
+    if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
+    try: run_enrichment(); return jsonify({'status': 'success', 'message': 'Data enrichment executed.'})
+    except Exception as e: return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
