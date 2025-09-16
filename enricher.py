@@ -1,11 +1,11 @@
 import pandas as pd
 import yfinance as yf
+import time
 from database import get_tickers_by_category, get_db_connection
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
-
-import requests
 
 def scrape_sp500_tickers():
     """
@@ -18,10 +18,8 @@ def scrape_sp500_tickers():
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        # pandas.read_html can take the HTML text directly
         tables = pd.read_html(response.text)
         sp500_table = tables[0]
-        # The ticker symbol is in the 'Symbol' column
         tickers = set(sp500_table['Symbol'].tolist())
         print(f"Successfully scraped {len(tickers)} S&P 500 tickers.")
         return tickers
@@ -35,6 +33,9 @@ def update_stock_details(ticker, market_cap, sector, is_sp500):
     if not conn: return
     cursor = conn.cursor()
     try:
+        # Check if a row for this ticker already exists, if not, this will fail gracefully.
+        # A better approach would be to INSERT...ON DUPLICATE KEY UPDATE if the primary key was just the ticker.
+        # Given the composite key, a simple UPDATE is safer.
         sql = """
             UPDATE stocks
             SET market_cap = %s, sector = %s, is_sp500 = %s
@@ -58,9 +59,6 @@ def run_enrichment():
 
     sp500_tickers = scrape_sp500_tickers()
 
-    # Get all tickers from all categories in our database
-    # This is inefficient, a better way would be a single query.
-    # But for a script that runs periodically, it's acceptable.
     print("Fetching all existing tickers from database...")
     all_db_tickers = set()
     categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'etf', 'generic_stock', 'bond']
@@ -68,6 +66,7 @@ def run_enrichment():
         all_db_tickers.update(get_tickers_by_category(category))
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
+    enriched_count = 0
 
     for ticker in all_db_tickers:
         try:
@@ -78,18 +77,21 @@ def run_enrichment():
             sector = stock_info.get('sector')
             is_sp500 = ticker in sp500_tickers
 
-            if market_cap and sector:
+            if market_cap or sector or is_sp500:
                 update_stock_details(ticker, market_cap, sector, is_sp500)
+                enriched_count += 1
             else:
-                # Also flag S&P 500 stocks even if other info is missing
-                if is_sp500:
-                    update_stock_details(ticker, None, None, True)
-                print(f"  -> Could not find full info for {ticker}.")
+                print(f"  -> No new info found for {ticker}.")
+
+            # Add a delay to avoid rate limiting
+            time.sleep(2)
 
         except Exception as e:
             print(f"  -> Error processing {ticker}: {e}")
+            # Also sleep on error to avoid hammering the API
+            time.sleep(2)
 
-    print("--- Data Enrichment Pipeline Finished ---")
+    print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
 if __name__ == '__main__':
     run_enrichment()
