@@ -36,8 +36,8 @@ POSITIVE_SENTIMENT_THRESHOLD = 0.2
 CATEGORIES = {
     'hot_stock': { 'db_categories': ['sp500', 'generic_stock', 'etf'], 'display_name': 'Hot Picks' },
     'penny_stock': { 'db_categories': ['penny', 'etf', 'generic_stock'], 'display_name': '$5 or Less', 'price_limit': 5 },
-    'monthly_dividend': {'db_category': 'monthly_dividend', 'display_name': 'Monthly Dividends'},
-    'high_yield_dividend': {'db_category': 'high_yield', 'display_name': 'High-Yield Dividends'}
+    'monthly_dividend': {'db_categories': ['monthly_dividend'], 'display_name': 'Monthly Dividends'},
+    'high_yield_dividend': {'db_categories': ['high_yield'], 'display_name': 'High-Yield Dividends'}
 }
 
 # --- Stock Finding Logic ---
