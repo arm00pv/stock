@@ -174,7 +174,7 @@ def find_hot_stock(category_key):
     return find_growth_candidate(categories_to_search=details.get('db_categories', []), price_limit=details.get('price_limit'))
 
 def find_best_candidate_from_all():
-    return find_growth_candidate(categories_to_search=['sp500', 'penny', 'etf', 'generic_stock'])
+    return find_growth_candidate(categories_to_search=['sp500', 'penny', 'etf', 'generic_stock', 'bond'])
 
 def find_dividend_stock(category):
     recent_picks = get_recently_picked_tickers(category)
@@ -234,33 +234,45 @@ def portfolio_data(portfolio_name):
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
-    investment_amount = 5.00
-    result = None
-    if portfolio_name == 'daily_investment':
-        if not is_market_open(): return jsonify({'status': 'success', 'message': 'Market is closed today. No investment made.'})
-        result = find_best_candidate_from_all()
-        if result and result.get('ticker'): save_daily_pick('daily_investment_pick', result['ticker'], result.get('sentiment'))
-    elif portfolio_name == 'main':
-        result = find_hot_stock('hot_stock')
-    elif portfolio_name == 'monthly_dividend':
-        result = find_dividend_stock('monthly_dividend')
-    elif portfolio_name == 'high_yield_investment':
-        result = find_dividend_stock('high_yield')
-    else:
-        return jsonify({'status': 'error', 'message': 'Invalid portfolio name.'}), 404
-
-    candidate_ticker = result.get('ticker') if result else None
-    if not candidate_ticker: return jsonify({'status': 'error', 'message': f'No suitable stock found for {portfolio_name} portfolio investment.'})
-
     try:
-        price = yf.Ticker(candidate_ticker).info.get('regularMarketPrice')
-        if not price or price <= 0: raise ValueError("Invalid price")
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Could not fetch price for {candidate_ticker}: {e}"})
+        investment_amount = 5.00
+        result = None
+        if portfolio_name == 'daily_investment':
+            if not is_market_open(): return jsonify({'status': 'success', 'message': 'Market is closed today. No investment made.'})
+            result = find_best_candidate_from_all()
+            if result and result.get('ticker'): save_daily_pick('daily_investment_pick', result['ticker'], result.get('sentiment'))
+        elif portfolio_name == 'main':
+            result = find_hot_stock('hot_stock')
+        elif portfolio_name == 'monthly_dividend':
+            result = find_dividend_stock('monthly_dividend')
+        elif portfolio_name == 'high_yield_investment':
+            result = find_dividend_stock('high_yield')
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid portfolio name.'}), 404
 
-    shares_to_buy = investment_amount / price
-    execute_investment(portfolio_name, candidate_ticker, shares_to_buy, price, investment_amount)
-    return jsonify({'status': 'success', 'message': f"Successfully invested ${investment_amount:.2f} in {candidate_ticker} for '{portfolio_name}' portfolio."})
+        candidate_ticker = result.get('ticker') if result else None
+        if not candidate_ticker: return jsonify({'status': 'error', 'message': f'No suitable stock found for {portfolio_name} portfolio investment.'})
+
+        price = yf.Ticker(candidate_ticker).info.get('regularMarketPrice')
+        if not price or price <= 0:
+            print(f"Error: Invalid or zero price ('{price}') received for ticker {candidate_ticker}. Aborting investment.")
+            raise ValueError(f"Invalid price for {candidate_ticker}")
+
+        shares_to_buy = investment_amount / price
+        execute_investment(portfolio_name, candidate_ticker, shares_to_buy, price, investment_amount)
+        print(f"Successfully executed investment of ${investment_amount:.2f} in {candidate_ticker} for '{portfolio_name}' portfolio.")
+        return jsonify({'status': 'success', 'message': f"Successfully invested ${investment_amount:.2f} in {candidate_ticker} for '{portfolio_name}' portfolio."})
+    except BaseException as e:
+        # Using BaseException to catch everything, including SystemExit from libraries
+        import traceback
+        print(f"--- UNHANDLED EXCEPTION IN trigger_investment ---")
+        print(f"Portfolio: {portfolio_name}")
+        print(f"Exception Type: {type(e).__name__}")
+        print(f"Exception: {e}")
+        traceback.print_exc()
+        print(f"-------------------------------------------------")
+        # Return a generic 500 error, the real details are in the server log
+        return jsonify({'status': 'error', 'message': 'An unexpected server error occurred. Check server logs for details.'}), 500
 
 @app.route('/api/run-scraper', methods=['POST'])
 def run_scraper_api():
