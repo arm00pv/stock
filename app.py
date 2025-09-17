@@ -1,4 +1,5 @@
 import os
+import random
 from datetime import datetime, timedelta
 import yfinance as yf
 import pandas as pd
@@ -31,6 +32,7 @@ MIN_AVG_VOLUME = 100000
 SMA_SHORT = 50
 SMA_LONG = 200
 POSITIVE_SENTIMENT_THRESHOLD = 0.2
+MAX_TICKERS_TO_SCREEN = 300
 
 # --- Categories ---
 CATEGORIES = {
@@ -60,18 +62,23 @@ def find_growth_candidate(categories_to_search, price_limit=None):
 
     candidate_tickers = [t for t in unique_tickers if t not in recent_picks]
     print(f"Screening {len(candidate_tickers)} tickers after removing recent picks.")
+
+    # 3. Limit number of tickers to prevent memory overload and timeouts
+    if len(candidate_tickers) > MAX_TICKERS_TO_SCREEN:
+        print(f"Candidate list is too large ({len(candidate_tickers)}). Screening a random sample of {MAX_TICKERS_TO_SCREEN}.")
+        candidate_tickers = random.sample(candidate_tickers, MAX_TICKERS_TO_SCREEN)
+
     if not candidate_tickers:
         print("No tickers left to screen. Aborting.")
         return {'ticker': None, 'sentiment': None}
 
-    # 3. Batch download historical data
-    print("Downloading historical data for all candidates...")
+    # 4. Batch download historical data
+    print(f"Downloading historical data for {len(candidate_tickers)} candidates...")
     end_date = datetime.now()
     start_date = end_date - timedelta(days=SMA_LONG + 50) # Get extra data for rolling averages
 
     try:
-        # yfinance can be flaky, so we add a try/except block
-        data = yf.download(candidate_tickers, start=start_date, end=end_date, group_by='ticker')
+        data = yf.download(candidate_tickers, start=start_date, end=end_date, group_by='ticker', progress=False)
         if data.empty:
             print("yfinance download returned no data.")
             raise ValueError("No data from yfinance")
@@ -89,39 +96,29 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     print("\n--- Tier 1: Golden Cross Screen ---")
     technical_candidates = []
 
-    # Using a list comprehension with a loop for clarity
     for ticker in candidate_tickers:
         try:
             hist = data[ticker]
             if hist.empty or len(hist.index) < SMA_LONG + 1:
-                # print(f"  - Skipping {ticker}: Not enough historical data ({len(hist.index)} days)")
                 continue
 
-            # Volume and Price check
             avg_volume = hist['Volume'].rolling(window=10).mean().iloc[-1]
             if avg_volume < MIN_AVG_VOLUME:
-                # print(f"  - Skipping {ticker}: Low volume ({avg_volume:.0f})")
                 continue
 
             if price_limit:
                 current_price = hist['Close'].iloc[-1]
                 if current_price > price_limit:
-                    # print(f"  - Skipping {ticker}: Price ${current_price:.2f} > limit of ${price_limit}")
                     continue
 
-            # SMA Calculation
             sma50 = hist['Close'].rolling(window=SMA_SHORT).mean()
             sma200 = hist['Close'].rolling(window=SMA_LONG).mean()
 
-            # Golden Cross Check
             if sma50.iloc[-2] < sma200.iloc[-2] and sma50.iloc[-1] > sma200.iloc[-1]:
                 print(f"  + Found Golden Cross Candidate: {ticker}")
                 technical_candidates.append(ticker)
-
         except KeyError:
-            # This happens if a ticker in the batch download fails
-            # print(f"  - Skipping {ticker}: Data not found in downloaded batch (likely delisted or invalid).")
-            pass
+            pass # Ticker data might not be in the batch
         except Exception as e:
             print(f"  - Error processing {ticker}: {e}")
 
@@ -146,9 +143,7 @@ def find_growth_candidate(categories_to_search, price_limit=None):
         try:
             hist = data[ticker]['Close']
             if len(hist) < 4: continue
-            # Check for 3 consecutive days of closing higher than the previous day
             if hist.iloc[-1] > hist.iloc[-2] and hist.iloc[-2] > hist.iloc[-3] and hist.iloc[-3] > hist.iloc[-4]:
-                 # Price check for this tier
                 if price_limit and hist.iloc[-1] > price_limit:
                     continue
                 print(f"  + Found 3-Day Growth Candidate: {ticker}")
@@ -163,11 +158,10 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     # Tier 3: Fallback
     print("\n--- Tier 3: Fallback ---")
     for ticker in candidate_tickers:
-        if ticker not in recent_picks: # Redundant check, but safe
+        if ticker not in recent_picks:
             print(f"Selected fallback candidate: {ticker}")
             return {'ticker': ticker, 'sentiment': None}
 
-    # Ultimate fallback
     if unique_tickers:
         print(f"Selected ultimate fallback candidate: {unique_tickers[0]}")
         return {'ticker': unique_tickers[0], 'sentiment': None}
