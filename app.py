@@ -42,65 +42,138 @@ CATEGORIES = {
 
 # --- Stock Finding Logic ---
 def find_growth_candidate(categories_to_search, price_limit=None):
-    print(f"Searching for growth candidate in {categories_to_search} with price limit {price_limit}")
+    print(f"--- Starting Growth Candidate Search ---")
+    print(f"Params: categories={categories_to_search}, price_limit={price_limit}")
+
+    # 1. Fetch all unique tickers from the database
     all_tickers = []
     for category in categories_to_search:
         all_tickers.extend(get_tickers_by_category(category))
     unique_tickers = sorted(list(set(all_tickers)))
+    print(f"Found {len(unique_tickers)} unique tickers to screen.")
+
+    # 2. Filter out recently picked tickers
     recent_picks = set()
     all_history_categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'daily_investment_pick']
     for category in all_history_categories:
         recent_picks.update(get_recently_picked_tickers(category))
 
+    candidate_tickers = [t for t in unique_tickers if t not in recent_picks]
+    print(f"Screening {len(candidate_tickers)} tickers after removing recent picks.")
+    if not candidate_tickers:
+        print("No tickers left to screen. Aborting.")
+        return {'ticker': None, 'sentiment': None}
+
+    # 3. Batch download historical data
+    print("Downloading historical data for all candidates...")
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=SMA_LONG + 50) # Get extra data for rolling averages
+
+    try:
+        # yfinance can be flaky, so we add a try/except block
+        data = yf.download(candidate_tickers, start=start_date, end=end_date, group_by='ticker')
+        if data.empty:
+            print("yfinance download returned no data.")
+            raise ValueError("No data from yfinance")
+    except Exception as e:
+        print(f"CRITICAL: yfinance download failed: {e}")
+        # Fallback to the old method for the first available ticker if batch fails
+        for ticker in candidate_tickers:
+            if ticker not in recent_picks:
+                return {'ticker': ticker, 'sentiment': None}
+        return {'ticker': unique_tickers[0] if unique_tickers else None, 'sentiment': None}
+
+    print("Historical data downloaded. Starting analysis...")
+
     # Tier 1: Golden Cross
+    print("\n--- Tier 1: Golden Cross Screen ---")
     technical_candidates = []
-    for ticker in unique_tickers:
-        if ticker in recent_picks: continue
+
+    # Using a list comprehension with a loop for clarity
+    for ticker in candidate_tickers:
         try:
-            stock_info = yf.Ticker(ticker).info
-            avg_volume = stock_info.get('averageDailyVolume10Day')
-            if avg_volume is None or avg_volume < MIN_AVG_VOLUME: continue
+            hist = data[ticker]
+            if hist.empty or len(hist.index) < SMA_LONG + 1:
+                # print(f"  - Skipping {ticker}: Not enough historical data ({len(hist.index)} days)")
+                continue
+
+            # Volume and Price check
+            avg_volume = hist['Volume'].rolling(window=10).mean().iloc[-1]
+            if avg_volume < MIN_AVG_VOLUME:
+                # print(f"  - Skipping {ticker}: Low volume ({avg_volume:.0f})")
+                continue
+
             if price_limit:
-                current_price = stock_info.get('regularMarketPrice')
-                if current_price is None or current_price > price_limit: continue
-            hist = yf.Ticker(ticker).history(period=f"{SMA_LONG + 2}d")
-            if len(hist) < SMA_LONG + 1: continue
-            hist['SMA50'] = hist['Close'].rolling(window=SMA_SHORT).mean()
-            hist['SMA200'] = hist['Close'].rolling(window=SMA_LONG).mean()
-            if pd.notna(hist['SMA50'].iloc[-1]) and pd.notna(hist['SMA200'].iloc[-1]):
-                if hist['SMA50'].iloc[-2] < hist['SMA200'].iloc[-2] and hist['SMA50'].iloc[-1] > hist['SMA200'].iloc[-1]:
-                    technical_candidates.append(ticker)
-        except Exception: pass
+                current_price = hist['Close'].iloc[-1]
+                if current_price > price_limit:
+                    # print(f"  - Skipping {ticker}: Price ${current_price:.2f} > limit of ${price_limit}")
+                    continue
+
+            # SMA Calculation
+            sma50 = hist['Close'].rolling(window=SMA_SHORT).mean()
+            sma200 = hist['Close'].rolling(window=SMA_LONG).mean()
+
+            # Golden Cross Check
+            if sma50.iloc[-2] < sma200.iloc[-2] and sma50.iloc[-1] > sma200.iloc[-1]:
+                print(f"  + Found Golden Cross Candidate: {ticker}")
+                technical_candidates.append(ticker)
+
+        except KeyError:
+            # This happens if a ticker in the batch download fails
+            # print(f"  - Skipping {ticker}: Data not found in downloaded batch (likely delisted or invalid).")
+            pass
+        except Exception as e:
+            print(f"  - Error processing {ticker}: {e}")
 
     if technical_candidates:
+        print(f"\nFound {len(technical_candidates)} technical candidates. Analyzing sentiment...")
         sentiment_scores = get_sentiment_for_tickers(technical_candidates)
         sentiment_candidates = [{'ticker': t, 'sentiment': sentiment_scores.get(t, 0)} for t in technical_candidates]
         sentiment_candidates.sort(key=lambda x: x['sentiment'], reverse=True)
-        if sentiment_candidates[0]['sentiment'] >= POSITIVE_SENTIMENT_THRESHOLD:
-            return sentiment_candidates[0]
+
+        best_candidate = sentiment_candidates[0]
+        if best_candidate['sentiment'] >= POSITIVE_SENTIMENT_THRESHOLD:
+            print(f"Selected candidate by sentiment: {best_candidate['ticker']} (Score: {best_candidate['sentiment']})")
+            return best_candidate
+        else:
+            print(f"Top candidate {best_candidate['ticker']} did not meet sentiment threshold. Falling back to first technical candidate.")
+            return {'ticker': technical_candidates[0], 'sentiment': None}
 
     # Tier 2: 3-Day Growth
+    print("\n--- Tier 2: 3-Day Growth Screen ---")
     three_day_candidates = []
-    for ticker in unique_tickers:
-        if ticker in recent_picks: continue
+    for ticker in candidate_tickers:
         try:
-            if price_limit:
-                pass # Price already checked if it was a technical candidate
-            hist = yf.Ticker(ticker).history(period="7d")
+            hist = data[ticker]['Close']
             if len(hist) < 4: continue
-            if all(hist['Close'].iloc[-i] > hist['Close'].iloc[-i-1] for i in range(1, 4)):
+            # Check for 3 consecutive days of closing higher than the previous day
+            if hist.iloc[-1] > hist.iloc[-2] and hist.iloc[-2] > hist.iloc[-3] and hist.iloc[-3] > hist.iloc[-4]:
+                 # Price check for this tier
+                if price_limit and hist.iloc[-1] > price_limit:
+                    continue
+                print(f"  + Found 3-Day Growth Candidate: {ticker}")
                 three_day_candidates.append(ticker)
-        except Exception: pass
+        except (KeyError, IndexError):
+            continue
 
     if three_day_candidates:
+        print(f"Selected candidate by 3-day growth: {three_day_candidates[0]}")
         return {'ticker': three_day_candidates[0], 'sentiment': None}
 
     # Tier 3: Fallback
-    for ticker in unique_tickers:
-        if ticker not in recent_picks:
+    print("\n--- Tier 3: Fallback ---")
+    for ticker in candidate_tickers:
+        if ticker not in recent_picks: # Redundant check, but safe
+            print(f"Selected fallback candidate: {ticker}")
             return {'ticker': ticker, 'sentiment': None}
 
-    return {'ticker': unique_tickers[0] if unique_tickers else None, 'sentiment': None}
+    # Ultimate fallback
+    if unique_tickers:
+        print(f"Selected ultimate fallback candidate: {unique_tickers[0]}")
+        return {'ticker': unique_tickers[0], 'sentiment': None}
+
+    print("--- No suitable stock found in any tier. ---")
+    return {'ticker': None, 'sentiment': None}
 
 def find_hot_stock(category_key):
     details = CATEGORIES.get(category_key, {})
