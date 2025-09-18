@@ -1,0 +1,150 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    width: 100%;
+    max-width: 900px;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.tab-link {
+    background: none;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 16px;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+}
+
+.tab-link.active {
+    border-bottom-color: #007bff;
+    color: #007bff;
+    font-weight: bold;
+}
+
+.tab-link:hover {
+    background-color: #f0f0f0;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.daily-pick-container h2 {
+    font-size: 2.5rem;
+    color: #007bff;
+    margin: 10px 0;
+    text-align: center;
+}
+
+.historical-picks-container ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.historical-picks-container li {
+    background: #fafafa;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.ticker-link {
+    text-decoration: none;
+    color: #0056b3;
+    font-weight: bold;
+}
+.ticker-link:hover {
+    text-decoration: underline;
+}
+
+.portfolio-summary {
+    display: flex;
+    justify-content: space-around;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.portfolio-metric {
+    text-align: center;
+    margin: 10px;
+}
+
+.portfolio-metric .label {
+    font-size: 0.9rem;
+    color: #666;
+    display: block;
+}
+
+.portfolio-metric .value {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+th {
+    background-color: #f7f7f7;
+    font-weight: bold;
+}
+
+.positive-return {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.negative-return {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
