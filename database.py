@@ -120,6 +120,9 @@ def execute_investment(portfolio_name, ticker, shares, price, investment_amount)
     if not conn: return
     cursor = conn.cursor()
     try:
+        print(f"--- EXECUTING INVESTMENT for {portfolio_name} ---")
+        print(f"Attempting to buy {shares} of {ticker} at ${price}")
+
         cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE portfolio_name = %s FOR UPDATE', (portfolio_name,))
         summary = cursor.fetchone()
         if not summary:
@@ -128,13 +131,18 @@ def execute_investment(portfolio_name, ticker, shares, price, investment_amount)
 
         cash, total_invested = summary
         cost = Decimal(str(shares)) * Decimal(str(price))
+        dec_investment = Decimal(str(investment_amount))
 
-        # In this simple model, every investment is new capital.
-        new_cash = Decimal(str(cash)) + Decimal(str(investment_amount)) - cost
-        new_total_invested = Decimal(str(total_invested)) + Decimal(str(investment_amount))
+        print(f"Before investment: Cash = ${cash}, Total Invested = ${total_invested}")
+        print(f"Investment amount = ${dec_investment}, Purchase cost = ${cost}")
+
+        new_cash = Decimal(str(cash)) + dec_investment - cost
+        new_total_invested = Decimal(str(total_invested)) + dec_investment
+
+        print(f"After investment: New Cash = ${new_cash}, New Total Invested = ${new_total_invested}")
 
         if new_cash < 0:
-            print(f"Investment Error: Not enough cash for {portfolio_name}.")
+            print(f"INVESTMENT FAILED: Not enough cash for {portfolio_name}.")
             conn.rollback()
             return
 
@@ -148,6 +156,7 @@ def execute_investment(portfolio_name, ticker, shares, price, investment_amount)
             (new_cash, new_total_invested, portfolio_name)
         )
         conn.commit()
+        print(f"--- INVESTMENT SUCCEEDED for {portfolio_name} ---")
     except mysql.connector.Error as err:
         conn.rollback()
         print(f"Database error during investment: {err}")

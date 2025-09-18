@@ -52,15 +52,27 @@ def api_daily_pick(category_key):
     if category_key not in TICKER_CATEGORIES:
         return jsonify({'error': 'Invalid category'}), 404
 
-    price_limit = 5 if category_key == 'penny_stock' else None
-    ticker = find_stock_of_the_day(category_key, price_limit)
-
-    if ticker:
-        save_daily_pick(category_key, ticker)
-
+    # Check if a pick for today already exists
     history = get_pick_history_for_category(category_key)
-    latest_pick = history[0]['ticker'] if history else "N/A"
-    return jsonify({'ticker': latest_pick, 'history': history})
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    todays_pick_ticker = None
+
+    if history:
+        latest_pick_date_str = history[0]['pick_date'].strftime('%Y-%m-%d')
+        if latest_pick_date_str == today_str:
+            todays_pick_ticker = history[0]['ticker']
+
+    # If no pick exists for today, find a new one
+    if not todays_pick_ticker:
+        price_limit = 5 if category_key == 'penny_stock' else None
+        todays_pick_ticker = find_stock_of_the_day(category_key, price_limit)
+        if todays_pick_ticker:
+            save_daily_pick(category_key, todays_pick_ticker)
+            # Re-fetch history to include the newly saved pick
+            history = get_pick_history_for_category(category_key)
+
+    latest_pick_to_display = history[0]['ticker'] if history else "N/A"
+    return jsonify({'ticker': latest_pick_to_display, 'history': history})
 
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
