@@ -1,5 +1,6 @@
 import os
 import yfinance as yf
+import pandas as pd
 from flask import Flask, render_template, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
@@ -61,55 +62,74 @@ def api_daily_pick(category_key):
     latest_pick = history[0]['ticker'] if history else "N/A"
     return jsonify({'ticker': latest_pick, 'history': history})
 
-@app.route('/api/portfolio/<portfolio_name>')
-def portfolio_data(portfolio_name):
-    summary = get_portfolio_summary(portfolio_name)
-    holdings = get_portfolio_holdings(portfolio_name)
+@app.route('/api/all-portfolios')
+def all_portfolios_data():
+    """
+    This single, efficient endpoint fetches all data for all portfolios.
+    """
+    portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+    all_holdings = {}
+    all_tickers = set()
 
-    total_market_value = 0.0
-    total_cost_basis = 0.0
+    # Step 1: Gather all holdings and unique tickers
+    for name in portfolio_names:
+        holdings = get_portfolio_holdings(name)
+        all_holdings[name] = holdings
+        for holding in holdings:
+            all_tickers.add(holding['ticker'])
 
-    tickers_for_batch_fetch = [h['ticker'] for h in holdings]
+    # Step 2: Batch fetch all prices in one go
     price_data = {}
-    if tickers_for_batch_fetch:
+    if all_tickers:
         try:
-            data = yf.download(tickers_for_batch_fetch, period='1d', progress=False)
-            if not data.empty:
-                price_data = data['Close'].iloc[-1].to_dict()
+            data = yf.download(list(all_tickers), period='1d', progress=False)
+            if not data.empty and 'Close' in data and not data['Close'].empty:
+                # Handle both single and multi-ticker responses
+                if len(all_tickers) == 1:
+                    price_data[list(all_tickers)[0]] = data['Close'].iloc[-1]
+                else:
+                    price_data = data['Close'].iloc[-1].to_dict()
         except Exception as e:
-            print(f"Warning: yfinance batch download failed: {e}")
+            print(f"CRITICAL: Main yfinance batch download failed: {e}")
 
-    for holding in holdings:
-        cost_basis = float(holding['shares']) * float(holding['purchase_price'])
-        total_cost_basis += cost_basis
+    # Step 3: Process each portfolio with the fetched prices
+    response_data = {}
+    for name in portfolio_names:
+        summary = get_portfolio_summary(name)
+        holdings = all_holdings[name]
 
-        current_price = price_data.get(holding['ticker'])
-        if current_price is None:
-            current_price = float(holding['purchase_price']) # Fallback
+        total_market_value = 0.0
 
-        current_value = float(holding['shares']) * current_price
-        total_market_value += current_value
+        for holding in holdings:
+            current_price = price_data.get(holding['ticker'])
+            if current_price is None or pd.isna(current_price):
+                current_price = float(holding['purchase_price']) # Fallback
 
-        holding['current_price'] = current_price
-        holding['current_value'] = current_value
-        holding['cost_basis'] = cost_basis
-        holding['gain_loss'] = current_value - cost_basis
+            holding['current_price'] = current_price
+            holding['current_value'] = float(holding['shares']) * current_price
+            holding['cost_basis'] = float(holding['shares']) * float(holding['purchase_price'])
+            holding['gain_loss'] = holding['current_value'] - holding['cost_basis']
+            total_market_value += holding['current_value']
 
-    total_gain_loss = total_market_value - total_cost_basis
-    total_capital_invested = summary[1]
+        total_capital_invested = summary[1]
+        # Note: total_cost_basis is the sum of cost_basis of *current* holdings, which can change.
+        # total_capital_invested is the sum of all money *put into* the portfolio. This is the correct base for ROI.
+        total_gain_loss = total_market_value - sum(h['cost_basis'] for h in holdings)
 
-    roi_percentage = (total_gain_loss / total_capital_invested) * 100 if total_capital_invested > 0 else 0
+        roi_percentage = (total_gain_loss / total_capital_invested) * 100 if total_capital_invested > 0 else 0
 
-    return jsonify({
-        'portfolio_name': portfolio_name,
-        'cash_balance': summary[0],
-        'total_invested': total_capital_invested,
-        'current_market_value': total_market_value,
-        'total_assets': summary[0] + total_market_value,
-        'total_gain_loss': total_gain_loss,
-        'roi_percentage': roi_percentage,
-        'holdings': holdings
-    })
+        response_data[name] = {
+            'portfolio_name': name,
+            'cash_balance': summary[0],
+            'total_invested': total_capital_invested,
+            'current_market_value': total_market_value,
+            'total_assets': summary[0] + total_market_value,
+            'total_gain_loss': total_gain_loss,
+            'roi_percentage': roi_percentage,
+            'holdings': holdings
+        }
+
+    return jsonify(response_data)
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):

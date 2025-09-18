@@ -113,50 +113,64 @@
                 });
         }
 
-        function populatePortfolio(portfolioName) {
+        function renderPortfolioData(portfolioName, data) {
             const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName}`);
             const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('tbody');
             const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('thead');
 
-            summaryDiv.innerHTML = SPINNER_HTML;
-            holdingsTableBody.innerHTML = '';
+            const gainLossClass = data.total_gain_loss >= 0 ? 'positive-return' : 'negative-return';
+            const gainLossSign = data.total_gain_loss >= 0 ? '+' : '';
+            summaryDiv.innerHTML = `
+                <div class="portfolio-metric"><span class="label">Total Invested</span><span class="value">$${data.total_invested.toFixed(2)}</span></div>
+                <div class="portfolio-metric"><span class="label">Market Value</span><span class="value">$${data.current_market_value.toFixed(2)}</span></div>
+                <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</span></div>
+                <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
 
-            fetch(`${API_BASE_URL}/api/portfolio/${portfolioName}`)
+            holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th></tr>`;
+            holdingsTableBody.innerHTML = ''; // Clear previous content
+            if (data.holdings && data.holdings.length > 0) {
+                data.holdings.forEach(h => {
+                    const row = holdingsTableBody.insertRow();
+                    const hGainLossClass = h.gain_loss >= 0 ? 'positive-return' : 'negative-return';
+                    const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
+                    row.innerHTML = `
+                        <td>${createTickerLink(h.ticker)}</td>
+                        <td>${h.shares.toFixed(6)}</td>
+                        <td>$${h.cost_basis.toFixed(2)}</td>
+                        <td class="${hGainLossClass}">$${h.current_value.toFixed(2)}</td>
+                        <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>`;
+                });
+            } else {
+                holdingsTableBody.innerHTML = `<tr><td colspan="5">No holdings yet.</td></tr>`;
+            }
+        }
+
+        function populateAllPortfolios() {
+            const portfolioNames = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment'];
+            portfolioNames.forEach(name => {
+                document.getElementById(`portfolio-summary-${name}`).innerHTML = SPINNER_HTML;
+                document.getElementById(`portfolio-holdings-${name}`).querySelector('tbody').innerHTML = '';
+            });
+
+            fetch(`${API_BASE_URL}/api/all-portfolios`)
                 .then(response => response.json())
-                .then(data => {
-                    const gainLossClass = data.total_gain_loss >= 0 ? 'positive-return' : 'negative-return';
-                    const gainLossSign = data.total_gain_loss >= 0 ? '+' : '';
-                    summaryDiv.innerHTML = `
-                        <div class="portfolio-metric"><span class="label">Total Invested</span><span class="value">$${data.total_invested.toFixed(2)}</span></div>
-                        <div class="portfolio-metric"><span class="label">Market Value</span><span class="value">$${data.current_market_value.toFixed(2)}</span></div>
-                        <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</span></div>
-                        <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
-
-                    holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th></tr>`;
-                    if (data.holdings && data.holdings.length > 0) {
-                        data.holdings.forEach(h => {
-                            const row = holdingsTableBody.insertRow();
-                            const hGainLossClass = h.gain_loss >= 0 ? 'positive-return' : 'negative-return';
-                            const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
-                            row.innerHTML = `
-                                <td>${createTickerLink(h.ticker)}</td>
-                                <td>${h.shares.toFixed(6)}</td>
-                                <td>$${h.cost_basis.toFixed(2)}</td>
-                                <td class="${hGainLossClass}">$${h.current_value.toFixed(2)}</td>
-                                <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>`;
-                        });
-                    } else {
-                        holdingsTableBody.innerHTML = `<tr><td colspan="5">No holdings yet.</td></tr>`;
+                .then(allData => {
+                    for (const portfolioName in allData) {
+                        if (allData.hasOwnProperty(portfolioName)) {
+                            renderPortfolioData(portfolioName, allData[portfolioName]);
+                        }
                     }
                 }).catch(err => {
-                    summaryDiv.innerHTML = `<p>Could not load portfolio data.</p>`;
-                    console.error('Error fetching portfolio:', err);
+                    console.error('Error fetching all portfolios:', err);
+                    portfolioNames.forEach(name => {
+                        document.getElementById(`portfolio-summary-${name}`).innerHTML = `<p>Could not load portfolio data.</p>`;
+                    });
                 });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
             ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield'].forEach(populatePicks);
-            ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment'].forEach(populatePortfolio);
+            populateAllPortfolios();
         });
     </script>
 </body>
