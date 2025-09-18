@@ -80,69 +80,76 @@ def all_portfolios_data():
     """
     This single, efficient endpoint fetches all data for all portfolios.
     """
-    portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
-    all_holdings = {}
-    all_tickers = set()
+    try:
+        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+        all_holdings = {}
+        all_tickers = set()
 
-    # Step 1: Gather all holdings and unique tickers
-    for name in portfolio_names:
-        holdings = get_portfolio_holdings(name)
-        all_holdings[name] = holdings
-        for holding in holdings:
-            all_tickers.add(holding['ticker'])
+        # Step 1: Gather all holdings and unique tickers
+        for name in portfolio_names:
+            holdings = get_portfolio_holdings(name)
+            all_holdings[name] = holdings
+            for holding in holdings:
+                all_tickers.add(holding['ticker'])
 
-    # Step 2: Batch fetch all prices in one go
-    price_data = {}
-    if all_tickers:
-        try:
+        # Step 2: Batch fetch all prices in one go
+        price_data = {}
+        if all_tickers:
             data = yf.download(list(all_tickers), period='1d', progress=False)
             if not data.empty and 'Close' in data and not data['Close'].empty:
-                # Handle both single and multi-ticker responses
                 if len(all_tickers) == 1:
                     price_data[list(all_tickers)[0]] = data['Close'].iloc[-1]
                 else:
                     price_data = data['Close'].iloc[-1].to_dict()
-        except Exception as e:
-            print(f"CRITICAL: Main yfinance batch download failed: {e}")
 
-    # Step 3: Process each portfolio with the fetched prices
-    response_data = {}
-    for name in portfolio_names:
-        summary = get_portfolio_summary(name)
-        holdings = all_holdings[name]
+        # Step 3: Process each portfolio with the fetched prices
+        response_data = {}
+        for name in portfolio_names:
+            summary = get_portfolio_summary(name)
+            holdings = all_holdings[name]
 
-        total_market_value = 0.0
+            total_market_value = 0.0
 
-        for holding in holdings:
-            current_price = price_data.get(holding['ticker'])
-            if current_price is None or pd.isna(current_price):
-                current_price = float(holding['purchase_price']) # Fallback
+            for holding in holdings:
+                current_price = price_data.get(holding['ticker'])
+                if current_price is None or pd.isna(current_price):
+                    current_price = float(holding['purchase_price'])
 
-            holding['current_price'] = current_price
-            holding['current_value'] = float(holding['shares']) * current_price
-            holding['cost_basis'] = float(holding['shares']) * float(holding['purchase_price'])
-            holding['gain_loss'] = holding['current_value'] - holding['cost_basis']
-            total_market_value += holding['current_value']
+                # Ensure all calculations result in standard float types
+                holding['shares'] = float(holding['shares'])
+                holding['purchase_price'] = float(holding['purchase_price'])
+                holding['current_price'] = float(current_price)
+                holding['cost_basis'] = holding['shares'] * holding['purchase_price']
+                holding['current_value'] = holding['shares'] * holding['current_price']
+                holding['gain_loss'] = holding['current_value'] - holding['cost_basis']
+                total_market_value += holding['current_value']
 
-        total_capital_invested = summary[1]
-        # Note: total_cost_basis is the sum of cost_basis of *current* holdings, which can change.
-        # total_capital_invested is the sum of all money *put into* the portfolio. This is the correct base for ROI.
-        total_gain_loss = total_market_value - sum(h['cost_basis'] for h in holdings)
+            total_capital_invested = float(summary[1])
+            total_gain_loss = total_market_value - sum(h['cost_basis'] for h in holdings)
+            roi_percentage = (total_gain_loss / total_capital_invested) * 100 if total_capital_invested > 0 else 0
 
-        roi_percentage = (total_gain_loss / total_capital_invested) * 100 if total_capital_invested > 0 else 0
+            response_data[name] = {
+                'portfolio_name': name,
+                'cash_balance': float(summary[0]),
+                'total_invested': total_capital_invested,
+                'current_market_value': total_market_value,
+                'total_assets': float(summary[0]) + total_market_value,
+                'total_gain_loss': total_gain_loss,
+                'roi_percentage': roi_percentage,
+                'holdings': holdings
+            }
 
-        response_data[name] = {
-            'portfolio_name': name,
-            'cash_balance': summary[0],
-            'total_invested': total_capital_invested,
-            'current_market_value': total_market_value,
-            'total_assets': summary[0] + total_market_value,
-            'total_gain_loss': total_gain_loss,
-            'roi_percentage': roi_percentage,
-            'holdings': holdings
-        }
+        print(f"--- Successfully prepared all portfolio data. ---")
+        return jsonify(response_data)
 
-    return jsonify(response_data)
+    except Exception as e:
+        import traceback
+        print(f"--- CRITICAL ERROR in all_portfolios_data ---")
+        print(f"Exception Type: {type(e).__name__}")
+        print(f"Exception: {e}")
+        traceback.print_exc()
+        print(f"---------------------------------------------")
+        return jsonify({'error': 'Failed to load portfolio data due to a server error.'}), 500
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
