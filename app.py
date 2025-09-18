@@ -10,6 +10,7 @@ from database import (
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment
 )
+from cache import get as get_from_cache, set as set_in_cache
 
 load_dotenv()
 
