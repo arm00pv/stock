@@ -2,3 +2,5 @@ flask
 mysql-connector-python
 yfinance
 python-dotenv
+pandas
+gunicorn

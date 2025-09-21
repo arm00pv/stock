@@ -5,12 +5,13 @@ import pandas as pd
 from flask import Flask, render_template, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+import logging
 from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment
 )
-from cache import get as get_from_cache, set as set_in_cache
+from ai_picker import get_ai_recommendation
 
 load_dotenv()
 
@@ -19,6 +20,11 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 
 # Initialize the database
 init_db()
+
+logging.basicConfig(level=logging.INFO,
+                    filename='app.log',
+                    filemode='a',
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Using hardcoded lists for stability during the reset
 TICKER_CATEGORIES = {
@@ -29,21 +35,16 @@ TICKER_CATEGORIES = {
 }
 
 def find_stock_of_the_day(category, price_limit=None):
-    """Picks the first stock from a hardcoded list that hasn't been picked recently."""
-    all_tickers = TICKER_CATEGORIES.get(category, [])
-    recent_picks = get_recently_picked_tickers(category, days=7)
-    for ticker in all_tickers:
-        if ticker in recent_picks:
-            continue
-        if price_limit:
-            try:
-                price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-                if price > price_limit:
-                    continue
-            except Exception:
-                continue
-        return ticker
-    return all_tickers[0] if all_tickers else None
+    """Picks a stock using the AI recommendation engine."""
+    tickers = TICKER_CATEGORIES.get(category, [])
+    if not tickers:
+        return None
+
+    # Use the AI picker to get a recommendation
+    recommended_ticker = get_ai_recommendation(category, tickers, price_limit)
+
+    # Fallback to the first ticker if AI fails to provide a recommendation
+    return recommended_ticker if recommended_ticker else tickers[0]
 
 @app.route('/')
 def index():
@@ -51,29 +52,38 @@ def index():
 
 @app.route('/api/daily-pick/<category_key>')
 def api_daily_pick(category_key):
+    logging.info(f"Request for daily pick for category: {category_key}")
     if category_key not in TICKER_CATEGORIES:
+        logging.error(f"Invalid category: {category_key}")
         return jsonify({'error': 'Invalid category'}), 404
 
     # Check if a pick for today already exists
     history = get_pick_history_for_category(category_key)
+    logging.info(f"Initial history: {history}")
     today_str = datetime.now().strftime('%Y-%m-%d')
     todays_pick_ticker = None
 
     if history:
+        logging.info("History is not empty, checking for today's pick.")
         latest_pick_date_str = history[0]['pick_date'].strftime('%Y-%m-%d')
         if latest_pick_date_str == today_str:
             todays_pick_ticker = history[0]['ticker']
+            logging.info(f"Found today's pick in history: {todays_pick_ticker}")
 
     # If no pick exists for today, find a new one
     if not todays_pick_ticker:
+        logging.info("No pick for today, finding a new one.")
         price_limit = 5 if category_key == 'penny_stock' else None
         todays_pick_ticker = find_stock_of_the_day(category_key, price_limit)
+        logging.info(f"New pick found: {todays_pick_ticker}")
         if todays_pick_ticker:
             save_daily_pick(category_key, todays_pick_ticker)
             # Re-fetch history to include the newly saved pick
             history = get_pick_history_for_category(category_key)
+            logging.info(f"History after saving new pick: {history}")
 
     latest_pick_to_display = history[0]['ticker'] if history else "N/A"
+    logging.info(f"Final ticker to display: {latest_pick_to_display}")
     return jsonify({'ticker': latest_pick_to_display, 'history': history})
 
 @app.route('/api/all-portfolios')
