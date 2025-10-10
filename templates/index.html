@@ -164,19 +164,21 @@
                 <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</span></div>
                 <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
 
-            holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th></tr>`;
+            const headers = ['Ticker', 'Shares', 'Cost Basis', 'Current Value', 'Gain / Loss'];
+            holdingsTableHead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
             holdingsTableBody.innerHTML = '';
+
             if (data.holdings && data.holdings.length > 0) {
                 data.holdings.forEach(h => {
                     const row = holdingsTableBody.insertRow();
                     const hGainLossClass = h.gain_loss >= 0 ? 'positive-return' : 'negative-return';
                     const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
                     row.innerHTML = `
-                        <td>${createTickerLink(h.ticker)}</td>
-                        <td>${h.shares.toFixed(6)}</td>
-                        <td>$${h.cost_basis.toFixed(2)}</td>
-                        <td class="${hGainLossClass}">$${h.current_value.toFixed(2)}</td>
-                        <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>`;
+                        <td data-label="Ticker">${createTickerLink(h.ticker)}</td>
+                        <td data-label="Shares">${h.shares.toFixed(6)}</td>
+                        <td data-label="Cost Basis">$${h.cost_basis.toFixed(2)}</td>
+                        <td data-label="Current Value"><span class="${hGainLossClass}">$${h.current_value.toFixed(2)}</span></td>
+                        <td data-label="Gain / Loss"><span class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</span></td>`;
                 });
             } else {
                 holdingsTableBody.innerHTML = `<tr><td colspan="5">No holdings yet.</td></tr>`;
