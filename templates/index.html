@@ -93,6 +93,10 @@
                     <option value="monthly_dividend">Monthly Dividend</option>
                     <option value="high_yield">High Yield</option>
                 </select>
+                <label for="bt-short-ma">Short MA:</label>
+                <input type="number" id="bt-short-ma" value="50">
+                <label for="bt-long-ma">Long MA:</label>
+                <input type="number" id="bt-long-ma" value="200">
                 <button onclick="runBacktest()">Run Backtest</button>
             </div>
             <div id="backtest-results-summary" class="portfolio-summary"></div>
@@ -124,12 +128,8 @@
             evt.currentTarget.className += " active";
         }
 
-        function createTickerLink(ticker, change_pct) {
-            if (!ticker || ticker.includes('Error')) {
-                return `<span>${ticker}</span>`;
-            }
-            const perfClass = change_pct > 0 ? 'positive-return' : (change_pct < 0 ? 'negative-return' : '');
-            return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank" class="${perfClass}">${ticker}</a>`;
+        function createTickerLink(ticker) {
+            return !ticker || ticker.includes('Error') ? `<span>${ticker}</span>` : `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
         }
 
         function populatePicks(categoryKey) {
@@ -141,16 +141,11 @@
             fetch(`${API_BASE_URL}/api/daily-pick/${categoryKey}`)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.todays_pick) {
-                        dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.todays_pick.ticker, data.todays_pick.change_pct)}</h2>`;
-                    } else {
-                        dailyPickDiv.innerHTML = `<h2>No pick for today.</h2>`;
-                    }
-
+                    dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}</h2>`;
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
                             const li = document.createElement('li');
-                            li.innerHTML = `${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker, pick.change_pct)}`;
+                            li.innerHTML = `${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker)}`;
                             historicalPicksUl.appendChild(li);
                         });
                     }
@@ -173,25 +168,53 @@
                 <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</span></div>
                 <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
 
-            const headers = ['Ticker', 'Shares', 'Cost Basis', 'Current Value', 'Gain / Loss'];
-            holdingsTableHead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+            holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th><th>Actions</th></tr>`;
             holdingsTableBody.innerHTML = '';
-
             if (data.holdings && data.holdings.length > 0) {
                 data.holdings.forEach(h => {
                     const row = holdingsTableBody.insertRow();
                     const hGainLossClass = h.gain_loss >= 0 ? 'positive-return' : 'negative-return';
                     const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
                     row.innerHTML = `
-                        <td data-label="Ticker">${createTickerLink(h.ticker)}</td>
-                        <td data-label="Shares">${h.shares.toFixed(6)}</td>
-                        <td data-label="Cost Basis">$${h.cost_basis.toFixed(2)}</td>
-                        <td data-label="Current Value"><span class="${hGainLossClass}">$${h.current_value.toFixed(2)}</span></td>
-                        <td data-label="Gain / Loss"><span class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</span></td>`;
+                        <td>${createTickerLink(h.ticker)}</td>
+                        <td>${h.shares.toFixed(6)}</td>
+                        <td>$${h.cost_basis.toFixed(2)}</td>
+                        <td class="${hGainLossClass}">$${h.current_value.toFixed(2)}</td>
+                        <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>
+                        <td><button onclick="sellStock('${portfolioName}', '${h.ticker}', ${h.shares})">Sell</button></td>`;
                 });
             } else {
-                holdingsTableBody.innerHTML = `<tr><td colspan="5">No holdings yet.</td></tr>`;
+                holdingsTableBody.innerHTML = `<tr><td colspan="6">No holdings yet.</td></tr>`;
             }
+        }
+
+        function sellStock(portfolioName, ticker, maxShares) {
+            const sharesToSell = prompt(`How many shares of ${ticker} do you want to sell? (Max: ${maxShares.toFixed(6)})`, maxShares.toFixed(6));
+            if (sharesToSell === null || isNaN(sharesToSell) || sharesToSell <= 0 || sharesToSell > maxShares) {
+                alert("Invalid number of shares.");
+                return;
+            }
+
+            fetch(`${API_BASE_URL}/api/sell-stock`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    portfolio_name: portfolioName,
+                    ticker: ticker,
+                    shares: parseFloat(sharesToSell)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.status === 'success') {
+                    populateAllPortfolios();
+                }
+            })
+            .catch(err => {
+                console.error('Error selling stock:', err);
+                alert('An error occurred while selling the stock.');
+            });
         }
 
         function populateAllPortfolios() {
@@ -229,6 +252,8 @@
                 initial_capital: document.getElementById('bt-capital').value,
                 investment_amount: document.getElementById('bt-investment').value,
                 category: document.getElementById('bt-category').value,
+                short_ma: document.getElementById('bt-short-ma').value,
+                long_ma: document.getElementById('bt-long-ma').value
             };
 
             fetch(`${API_BASE_URL}/api/backtest`, {
@@ -261,12 +286,28 @@
                     type: 'line',
                     data: {
                         labels: data.portfolio_history.map(h => h.date),
-                        datasets: [{
-                            label: 'Portfolio Value',
-                            data: data.portfolio_history.map(h => h.total_value),
-                            borderColor: 'rgb(75, 192, 192)',
-                            tension: 0.1
-                        }]
+                        datasets: [
+                            {
+                                label: 'Portfolio Value',
+                                data: data.portfolio_history.map(h => h.total_value),
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Short MA',
+                                data: data.short_ma,
+                                borderColor: 'rgb(255, 159, 64)',
+                                tension: 0.1,
+                                hidden: true
+                            },
+                            {
+                                label: 'Long MA',
+                                data: data.long_ma,
+                                borderColor: 'rgb(255, 99, 132)',
+                                tension: 0.1,
+                                hidden: true
+                            }
+                        ]
                     },
                     options: {
                         scales: {

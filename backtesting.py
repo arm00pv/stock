@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import logging
 import requests
+from cache import yf_download_cached
 
 logging.basicConfig(level=logging.INFO,
                     filename='backtesting.log',
@@ -90,15 +91,15 @@ def get_historical_recommendation(current_date, hist_data, tickers, sentiment_sc
     if not scored_tickers: return tickers[0] if tickers else None
     return sorted(scored_tickers, key=lambda x: x[1], reverse=True)[0][0]
 
-def run_backtest(start_date_str, end_date_str, initial_capital, investment_amount, category, tickers):
+def run_backtest(start_date_str, end_date_str, initial_capital, investment_amount, category, tickers, short_ma, long_ma):
     logging.info(f"Starting backtest for {category} from {start_date_str} to {end_date_str}")
 
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
 
-    fetch_start_date = start_date - timedelta(days=100)
+    fetch_start_date = start_date - timedelta(days=max(100, long_ma))
     try:
-        hist_data = yf.download(tickers, start=fetch_start_date, end=end_date, progress=False)
+        hist_data = yf_download_cached(tickers, start=fetch_start_date, end=end_date, progress=False)
         if hist_data.empty or 'Close' not in hist_data:
             return {"error": "Could not download valid historical data."}
     except Exception as e:
@@ -133,9 +134,25 @@ def run_backtest(start_date_str, end_date_str, initial_capital, investment_amoun
         total_value = cash + current_holdings_value
         portfolio_history.append({'date': day.strftime('%Y-%m-%d'), 'total_value': total_value})
 
+    portfolio_df = pd.DataFrame(portfolio_history).set_index('date')
+    portfolio_df.index = pd.to_datetime(portfolio_df.index)
+
+    short_ma_series = portfolio_df['total_value'].rolling(window=short_ma).mean()
+    long_ma_series = portfolio_df['total_value'].rolling(window=long_ma).mean()
+
     final_value = portfolio_history[-1]['total_value'] if portfolio_history else initial_capital
     total_return_pct = ((final_value - initial_capital) / initial_capital) * 100 if initial_capital > 0 else 0
 
     logging.info(f"Backtest complete. Final value: ${final_value:.2f}, Total return: {total_return_pct:.2f}%")
 
-    return {"status": "success", "start_date": start_date_str, "end_date": end_date_str, "initial_capital": initial_capital, "final_value": final_value, "total_return_pct": total_return_pct, "portfolio_history": portfolio_history}
+    return {
+        "status": "success",
+        "start_date": start_date_str,
+        "end_date": end_date_str,
+        "initial_capital": initial_capital,
+        "final_value": final_value,
+        "total_return_pct": total_return_pct,
+        "portfolio_history": portfolio_history,
+        "short_ma": short_ma_series.dropna().tolist(),
+        "long_ma": long_ma_series.dropna().tolist()
+    }

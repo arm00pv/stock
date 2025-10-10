@@ -8,11 +8,12 @@ from dotenv import load_dotenv
 from database import (
     init_db, get_all_portfolios_data,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
-    execute_investment, get_ai_settings, save_ai_settings
+    execute_investment, get_ai_settings, save_ai_settings, execute_sale
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
 from decimal import Decimal
+from cache import yf_download_cached
 
 load_dotenv()
 
@@ -39,46 +40,24 @@ def api_daily_pick(category_key):
     if category_key not in TICKER_CATEGORIES:
         return jsonify({'error': 'Invalid category'}), 404
 
-    history_data = get_pick_history_for_category(category_key)
+    history = get_pick_history_for_category(category_key)
     today_str = datetime.now().strftime('%Y-%m-%d')
-    todays_pick = None
+    todays_pick_ticker = None
 
-    # Identify today's pick or get a new one
-    if history_data and history_data[0]['pick_date'].strftime('%Y-%m-%d') == today_str:
-        todays_pick = {'ticker': history_data[0]['ticker']}
-    else:
+    if history:
+        latest_pick_date_str = history[0]['pick_date'].strftime('%Y-%m-%d')
+        if latest_pick_date_str == today_str:
+            todays_pick_ticker = history[0]['ticker']
+
+    if not todays_pick_ticker:
         price_limit = 5 if category_key == 'penny_stock' else None
-        new_ticker = get_ai_recommendation(category_key, TICKER_CATEGORIES.get(category_key, []), price_limit)
-        if new_ticker:
-            save_daily_pick(category_key, new_ticker)
-            todays_pick = {'ticker': new_ticker}
-            history_data = get_pick_history_for_category(category_key) # Refresh history
+        todays_pick_ticker = get_ai_recommendation(category_key, TICKER_CATEGORIES.get(category_key, []), price_limit)
+        if todays_pick_ticker:
+            save_daily_pick(category_key, todays_pick_ticker)
+            history = get_pick_history_for_category(category_key)
 
-    # Efficiently fetch all historical data in one batch
-    all_tickers = {pick['ticker'] for pick in history_data}
-    if todays_pick:
-        all_tickers.add(todays_pick['ticker'])
-
-    changes = {}
-    if all_tickers:
-        try:
-            hist = yf.download(list(all_tickers), period="2d", progress=False, raise_errors=False)
-            if not hist.empty:
-                close_prices = hist['Close']
-                if len(close_prices) > 1:
-                    change_pct = ((close_prices.iloc[-1] - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
-                    changes = change_pct.dropna().to_dict()
-        except Exception as e:
-            print(f"Error fetching batch daily changes: {e}")
-
-    # Assign changes
-    if todays_pick:
-        todays_pick['change_pct'] = changes.get(todays_pick['ticker'], 0)
-
-    for pick in history_data:
-        pick['change_pct'] = changes.get(pick['ticker'], 0)
-
-    return jsonify({'todays_pick': todays_pick, 'history': history_data})
+    latest_pick_to_display = history[0]['ticker'] if history else "N/A"
+    return jsonify({'ticker': latest_pick_to_display, 'history': history})
 
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
@@ -88,7 +67,7 @@ def all_portfolios_data():
 
         price_data = {}
         if all_tickers:
-            data = yf.download(list(all_tickers), period='1d', progress=False, raise_errors=False)
+            data = yf_download_cached(list(all_tickers), period='1d', progress=False, raise_errors=False)
             if not data.empty and 'Close' in data:
                 close_prices = data['Close']
                 if isinstance(close_prices, pd.Series):
@@ -141,9 +120,7 @@ def all_portfolios_data():
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
-    data = request.get_json()
-    investment_amount = float(data.get('investment_amount', 5.00)) if data else 5.00
-
+    investment_amount = 5.00
     category_map = {'main': 'hot_stock', 'monthly_dividend': 'monthly_dividend', 'high_yield_investment': 'high_yield', 'daily_investment': 'hot_stock'}
     category = category_map.get(portfolio_name)
 
@@ -157,14 +134,14 @@ def trigger_investment(portfolio_name):
         return jsonify({'status': 'error', 'message': 'No suitable stock found.'})
 
     try:
-        price_history = yf.Ticker(ticker).history(period="1d")
+        price_history = yf_download_cached(ticker, period="1d")
         if price_history.empty or 'Close' not in price_history or price_history['Close'].iloc[-1] <= 0:
             raise ValueError("Invalid or zero price from yfinance")
 
         price = price_history['Close'].iloc[-1]
         shares = investment_amount / price
         execute_investment(portfolio_name, ticker, shares, price, investment_amount)
-        return jsonify({'status': 'success', 'message': f'Successfully invested ${investment_amount:.2f} in {ticker}.'})
+        return jsonify({'status': 'success', 'message': f'Successfully invested in {ticker}.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Failed to invest in {ticker}: {e}'}), 500
 
@@ -176,6 +153,8 @@ def api_backtest():
     initial_capital = float(data.get('initial_capital', 10000))
     investment_amount = float(data.get('investment_amount', 100))
     category = data.get('category')
+    short_ma = int(data.get('short_ma', 50))
+    long_ma = int(data.get('long_ma', 200))
 
     if not all([start_date, end_date, category]):
         return jsonify({'error': 'Missing required parameters'}), 400
@@ -184,7 +163,7 @@ def api_backtest():
     if not tickers:
         return jsonify({'error': 'Invalid category'}), 400
 
-    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers)
+    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers, short_ma, long_ma)
     return jsonify(results)
 
 @app.route('/api/settings/<category>', methods=['GET'])
@@ -196,6 +175,32 @@ def api_get_settings(category):
         if isinstance(value, Decimal):
             settings[key] = float(value)
     return jsonify(settings)
+
+@app.route('/api/sell-stock', methods=['POST'])
+def api_sell_stock():
+    data = request.get_json()
+    portfolio_name = data.get('portfolio_name')
+    ticker = data.get('ticker')
+    shares_to_sell = data.get('shares')
+
+    if not all([portfolio_name, ticker, shares_to_sell]):
+        return jsonify({'status': 'error', 'message': 'Missing required parameters.'}), 400
+
+    try:
+        price_history = yf_download_cached(ticker, period="1d")
+        if price_history.empty or 'Close' not in price_history or price_history['Close'].iloc[-1] <= 0:
+            raise ValueError("Invalid or zero price from yfinance")
+
+        price = price_history['Close'].iloc[-1]
+
+        success, message = execute_sale(portfolio_name, ticker, float(shares_to_sell), price)
+        if success:
+            return jsonify({'status': 'success', 'message': message})
+        else:
+            return jsonify({'status': 'error', 'message': message}), 400
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'Failed to sell {ticker}: {e}'}), 500
 
 @app.route('/api/settings/<category>', methods=['POST'])
 def api_save_settings(category):

@@ -90,6 +90,47 @@ def init_db():
         if conn and conn.is_connected():
             conn.close()
 
+def execute_sale(portfolio_name, ticker, shares_to_sell, price):
+    conn = get_db_connection()
+    if not conn:
+        return False, "Database connection failed."
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            # Check current holdings
+            cursor.execute(
+                "SELECT SUM(shares) as total_shares FROM portfolio_transactions WHERE portfolio_name = %s AND ticker = %s",
+                (portfolio_name, ticker)
+            )
+            holding = cursor.fetchone()
+            if not holding or holding['total_shares'] < shares_to_sell:
+                return False, "Not enough shares to sell."
+
+            # Record the sale as a negative transaction
+            today_str = datetime.now().strftime('%Y-%m-%d')
+            cursor.execute(
+                'INSERT INTO portfolio_transactions (portfolio_name, ticker, shares, purchase_price, purchase_date) VALUES (%s, %s, %s, %s, %s)',
+                (portfolio_name, ticker, -shares_to_sell, price, today_str)
+            )
+
+            # Update the portfolio summary
+            proceeds = Decimal(str(shares_to_sell)) * Decimal(str(price))
+            cursor.execute(
+                'UPDATE portfolio_summary SET cash_balance = cash_balance + %s WHERE portfolio_name = %s',
+                (proceeds, portfolio_name)
+            )
+
+            conn.commit()
+            logging.info(f"Sale of {shares_to_sell} shares of {ticker} from {portfolio_name} successful.")
+            return True, f"Successfully sold {shares_to_sell} shares of {ticker}."
+
+    except mysql.connector.Error as err:
+        log_db_operation(execute_sale.__name__, err)
+        conn.rollback()
+        return False, "A database error occurred during the sale."
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
 def get_all_portfolios_data():
     conn = get_db_connection()
     if not conn: return {}, {}
@@ -227,13 +268,7 @@ def get_portfolio_holdings(portfolio_name):
     if not conn: return []
     try:
         with conn.cursor(dictionary=True) as cursor:
-            query = """
-                SELECT t.ticker, SUM(t.shares) as shares, AVG(t.purchase_price) as purchase_price
-                FROM portfolio_transactions t
-                WHERE t.portfolio_name = %s
-                GROUP BY t.ticker
-            """
-            cursor.execute(query, (portfolio_name,))
+            cursor.execute("SELECT id, ticker, shares, purchase_price FROM portfolio_transactions WHERE portfolio_name = %s", (portfolio_name,))
             return cursor.fetchall()
     except mysql.connector.Error as err:
         log_db_operation(get_portfolio_holdings.__name__, err)
