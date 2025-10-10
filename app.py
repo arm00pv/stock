@@ -13,6 +13,7 @@ from database import (
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
 from decimal import Decimal
+from ai_trader import manage_ai_portfolio
 from cache import yf_download_cached
 
 load_dotenv()
@@ -23,13 +24,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
 # Initialize the database
 init_db()
 
-# Using hardcoded lists for stability during the reset
-TICKER_CATEGORIES = {
-    'hot_stock': ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA', 'TSLA', 'META', 'JPM', 'JNJ', 'V'],
-    'penny_stock': ['SNDL', 'CTRM', 'ZOM', 'AMC', 'BB', 'EXPR', 'GSAT', 'NAKD', 'TXMD', 'GNUS'],
-    'monthly_dividend': ['O', 'MAIN', 'STAG', 'GAIN', 'GOOD', 'PBA', 'SBR', 'ADC', 'EPR', 'LTC'],
-    'high_yield': ['AGNC', 'ORC', 'PSEC', 'ARR', 'MFA', 'IVR', 'TWO', 'EARN', 'OXLC', 'HRZN']
-}
+from constants import TICKER_CATEGORIES
 
 @app.route('/')
 def index():
@@ -201,6 +196,14 @@ def api_sell_stock():
 
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Failed to sell {ticker}: {e}'}), 500
+
+@app.route('/api/run-ai-trader', methods=['POST'])
+def api_run_ai_trader():
+    try:
+        manage_ai_portfolio()
+        return jsonify({'status': 'success', 'message': 'AI portfolio management cycle complete.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
 
 @app.route('/api/settings/<category>', methods=['POST'])
 def api_save_settings(category):

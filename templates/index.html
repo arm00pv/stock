@@ -18,6 +18,7 @@
             <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Dividend Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Best Pick Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
+            <button class="tab-link" onclick="openTab(event, 'AIPortfolio')">AI-Guided Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
             <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
         </div>
@@ -72,6 +73,14 @@
             <div id="portfolio-summary-high_yield_investment" class="portfolio-summary"></div>
             <h2>Holdings</h2>
             <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <div id="AIPortfolio" class="tab-content">
+            <h1>AI-Guided Portfolio</h1>
+            <button onclick="runAITrader()">Run AI Trader</button>
+            <div id="portfolio-summary-ai_guided_portfolio" class="portfolio-summary"></div>
+            <h2>Holdings</h2>
+            <table id="portfolio-holdings-ai_guided_portfolio"><thead></thead><tbody></tbody></table>
         </div>
 
         <!-- Backtesting Tab -->
@@ -217,10 +226,28 @@
             });
         }
 
+        function runAITrader() {
+            fetch(`${API_BASE_URL}/api/run-ai-trader`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    if (data.status === 'success') {
+                        populateAllPortfolios();
+                    }
+                })
+                .catch(err => {
+                    console.error('Error running AI trader:', err);
+                    alert('An error occurred while running the AI trader.');
+                });
+        }
+
         function populateAllPortfolios() {
-            const portfolioNames = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment'];
+            const portfolioNames = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment', 'ai_guided_portfolio'];
             portfolioNames.forEach(name => {
-                document.getElementById(`portfolio-summary-${name}`).innerHTML = SPINNER_HTML;
+                const summaryDiv = document.getElementById(`portfolio-summary-${name}`);
+                if (summaryDiv) {
+                    summaryDiv.innerHTML = SPINNER_HTML;
+                }
                 document.getElementById(`portfolio-holdings-${name}`).querySelector('tbody').innerHTML = '';
             });
 

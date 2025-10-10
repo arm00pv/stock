@@ -47,7 +47,7 @@ def get_news_sentiment(tickers):
 
     return sentiment_scores
 
-def get_ai_recommendation(category, tickers, price_limit=None):
+def get_ai_recommendation(category, tickers, price_limit=None, return_score=False):
     """
     Provides a stock recommendation based on a customizable, advanced scoring model.
     """
@@ -71,7 +71,7 @@ def get_ai_recommendation(category, tickers, price_limit=None):
     scored_tickers = []
 
     for ticker in tickers:
-        if ticker in recent_picks:
+        if ticker in recent_picks and len(tickers) > 1: # Only skip if we have other options
             continue
         try:
             stock = yf.Ticker(ticker)
@@ -84,7 +84,6 @@ def get_ai_recommendation(category, tickers, price_limit=None):
             if price_limit and current_price > price_limit: continue
 
             score = 0
-
             price_change_pct = (hist['Close'].iloc[-1] - hist['Close'].iloc[-30]) / hist['Close'].iloc[-30] if len(hist) > 30 else 0
             score += (price_change_pct * 100) * float(settings['momentum_weight'])
 
@@ -109,8 +108,7 @@ def get_ai_recommendation(category, tickers, price_limit=None):
             sentiment_score = sentiment_scores.get(ticker, 0)
             score += (sentiment_score * 20) * float(settings['sentiment_weight'])
 
-            if score > 0:
-                scored_tickers.append((ticker, score))
+            scored_tickers.append((ticker, score))
 
         except Exception as e:
             logging.error(f"Could not process {ticker}: {e}", exc_info=True)
@@ -118,9 +116,17 @@ def get_ai_recommendation(category, tickers, price_limit=None):
 
     if not scored_tickers:
         logging.warning("No suitable tickers found after scoring.")
-        return tickers[0] if tickers else None
+        return (tickers[0], 0) if tickers else (None, 0)
 
     scored_tickers.sort(key=lambda x: x[1], reverse=True)
-    logging.info(f"Top scored ticker: {scored_tickers[0][0]}")
+    top_ticker, top_score = scored_tickers[0]
+    logging.info(f"Top scored ticker: {top_ticker} with score {top_score}")
 
-    return scored_tickers[0][0]
+    return (top_ticker, top_score) if return_score else top_ticker
+
+def get_ai_recommendation_score(category, ticker):
+    """
+    Returns the AI score for a single ticker.
+    """
+    _, score = get_ai_recommendation(category, [ticker], return_score=True)
+    return score

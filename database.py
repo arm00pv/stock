@@ -69,7 +69,7 @@ def init_db():
                 )
             """)
 
-            portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+            portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment', 'ai_guided_portfolio']
             for p_name in portfolios_to_init:
                 cursor.execute('SELECT COUNT(*) FROM portfolio_summary WHERE portfolio_name = %s', (p_name,))
                 if cursor.fetchone()[0] == 0:
