@@ -12,44 +12,45 @@ logging.basicConfig(level=logging.INFO,
 
 def get_news_sentiment(tickers):
     """
-    Fetches news sentiment for a list of tickers from the Marketaux API.
+    Fetches news sentiment for a list of tickers from the Marketaux API in a single call.
     """
     api_token = os.environ.get('MARKETAUX_API_KEY')
-    if not api_token:
-        logging.warning("Marketaux API key not found. Skipping sentiment analysis.")
-        return {}
+    if not api_token or not tickers:
+        logging.warning("Marketaux API key not found or no tickers provided. Skipping sentiment analysis.")
+        return {ticker: 0 for ticker in tickers}
 
-    sentiment_scores = {}
-    for ticker in tickers:
-        try:
-            params = {
-                'api_token': api_token,
-                'symbols': ticker,
-                'limit': 5,
-                'language': 'en',
-            }
-            response = requests.get("https://api.marketaux.com/v1/news/all", params=params)
-            response.raise_for_status()
-            data = response.json()
+    try:
+        params = {
+            'api_token': api_token,
+            'symbols': ','.join(tickers),
+            'limit': 100,
+            'language': 'en',
+            'filter_entities': 'true'
+        }
+        response = requests.get("https://api.marketaux.com/v1/news/all", params=params)
+        response.raise_for_status()
+        data = response.json()
 
-            if not data.get('data'):
-                sentiment_scores[ticker] = 0
-                continue
+        sentiments = {ticker: [] for ticker in tickers}
+        if data.get('data'):
+            for article in data['data']:
+                for entity in article.get('entities', []):
+                    ticker = entity.get('symbol')
+                    if ticker in sentiments:
+                        sentiments[ticker].append(entity.get('sentiment_score', 0))
 
-            total_sentiment = sum(entity.get('sentiment_score', 0) for article in data['data'] for entity in article.get('entities', []) if entity.get('symbol') == ticker)
-            article_count = sum(1 for article in data['data'] for entity in article.get('entities', []) if entity.get('symbol') == ticker)
+        return {
+            ticker: sum(scores) / len(scores) if scores else 0
+            for ticker, scores in sentiments.items()
+        }
 
-            sentiment_scores[ticker] = total_sentiment / article_count if article_count > 0 else 0
-
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Could not fetch news for {ticker}: {e}")
-            sentiment_scores[ticker] = 0
-
-    return sentiment_scores
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Could not fetch news for tickers {','.join(tickers)}: {e}")
+        return {ticker: 0 for ticker in tickers}
 
 def get_ai_recommendation(category, tickers, price_limit=None):
     """
-    Provides a stock recommendation based on a customizable, advanced scoring model.
+    Provides a stock recommendation based on a customizable, advanced scoring model with improved fallback logic.
     """
     logging.info(f"Starting AI recommendation for category: {category}")
 
@@ -65,10 +66,10 @@ def get_ai_recommendation(category, tickers, price_limit=None):
         recent_picks = get_recently_picked_tickers(category, days=7)
     except Exception as e:
         logging.error(f"Database error when fetching recent picks: {e}", exc_info=True)
-        recent_picks = []
+        recent_picks = set()
 
     sentiment_scores = get_news_sentiment(tickers)
-    scored_tickers = []
+    all_scored_tickers = []
 
     for ticker in tickers:
         if ticker in recent_picks:
@@ -84,7 +85,6 @@ def get_ai_recommendation(category, tickers, price_limit=None):
             if price_limit and current_price > price_limit: continue
 
             score = 0
-
             price_change_pct = (hist['Close'].iloc[-1] - hist['Close'].iloc[-30]) / hist['Close'].iloc[-30] if len(hist) > 30 else 0
             score += (price_change_pct * 100) * float(settings['momentum_weight'])
 
@@ -109,18 +109,25 @@ def get_ai_recommendation(category, tickers, price_limit=None):
             sentiment_score = sentiment_scores.get(ticker, 0)
             score += (sentiment_score * 20) * float(settings['sentiment_weight'])
 
-            if score > 0:
-                scored_tickers.append((ticker, score))
+            all_scored_tickers.append((ticker, score))
 
         except Exception as e:
             logging.error(f"Could not process {ticker}: {e}", exc_info=True)
             continue
 
-    if not scored_tickers:
-        logging.warning("No suitable tickers found after scoring.")
-        return tickers[0] if tickers else None
+    positive_scored_tickers = [t for t in all_scored_tickers if t[1] > 0]
 
-    scored_tickers.sort(key=lambda x: x[1], reverse=True)
-    logging.info(f"Top scored ticker: {scored_tickers[0][0]}")
+    if positive_scored_tickers:
+        positive_scored_tickers.sort(key=lambda x: x[1], reverse=True)
+        top_ticker = positive_scored_tickers[0][0]
+        logging.info(f"Top scored ticker with positive score: {top_ticker}")
+        return top_ticker
 
-    return scored_tickers[0][0]
+    if all_scored_tickers:
+        all_scored_tickers.sort(key=lambda x: x[1], reverse=True)
+        top_ticker = all_scored_tickers[0][0]
+        logging.warning(f"No tickers with positive score. Falling back to highest scored ticker: {top_ticker}")
+        return top_ticker
+
+    logging.warning("No suitable tickers found after scoring. All available tickers might have been recently picked.")
+    return None

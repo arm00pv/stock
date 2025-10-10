@@ -6,7 +6,7 @@ from flask import Flask, render_template, jsonify, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from database import (
-    init_db, get_portfolio_summary, get_portfolio_holdings,
+    init_db, get_all_portfolios_data,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings
 )
@@ -61,15 +61,8 @@ def api_daily_pick(category_key):
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
     try:
-        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
-        all_holdings = {}
-        all_tickers = set()
-
-        for name in portfolio_names:
-            holdings = get_portfolio_holdings(name)
-            all_holdings[name] = holdings
-            for holding in holdings:
-                all_tickers.add(holding['ticker'])
+        summaries, all_holdings = get_all_portfolios_data()
+        all_tickers = {holding['ticker'] for holdings in all_holdings.values() for holding in holdings}
 
         price_data = {}
         if all_tickers:
@@ -78,9 +71,8 @@ def all_portfolios_data():
                 price_data = data['Close'].iloc[-1].to_dict() if len(all_tickers) > 1 else {list(all_tickers)[0]: data['Close'].iloc[-1]}
 
         response_data = {}
-        for name in portfolio_names:
-            summary = get_portfolio_summary(name)
-            holdings = all_holdings[name]
+        for name, summary in summaries.items():
+            holdings = all_holdings.get(name, [])
             total_market_value = 0.0
 
             for holding in holdings:
@@ -88,33 +80,36 @@ def all_portfolios_data():
                 holding.update({
                     'shares': float(holding['shares']),
                     'purchase_price': float(holding['purchase_price']),
-                    'current_price': float(current_price),
+                    'current_price': current_price,
                     'cost_basis': float(holding['shares']) * float(holding['purchase_price']),
-                    'current_value': float(holding['shares']) * float(current_price),
-                    'gain_loss': (float(holding['shares']) * float(current_price)) - (float(holding['shares']) * float(holding['purchase_price']))
+                    'current_value': float(holding['shares']) * current_price,
+                    'gain_loss': (float(holding['shares']) * current_price) - (float(holding['shares']) * float(holding['purchase_price']))
                 })
                 total_market_value += holding['current_value']
 
-            total_capital_invested = float(summary[1])
+            total_capital_invested = float(summary['total_invested'])
+            cash_balance = float(summary['cash_balance'])
             roi_percentage = ((total_market_value - total_capital_invested) / total_capital_invested) * 100 if total_capital_invested > 0 else 0
 
             response_data[name] = {
                 'portfolio_name': name,
-                'cash_balance': float(summary[0]),
+                'cash_balance': cash_balance,
                 'total_invested': total_capital_invested,
                 'current_market_value': total_market_value,
-                'total_assets': float(summary[0]) + total_market_value,
+                'total_assets': cash_balance + total_market_value,
                 'total_gain_loss': total_market_value - total_capital_invested,
                 'roi_percentage': roi_percentage,
                 'holdings': holdings
             }
         return jsonify(response_data)
     except Exception as e:
-        return jsonify({'error': 'Failed to load portfolio data due to a server error.'}), 500
+        return jsonify({'error': f'Failed to load portfolio data: {e}'}), 500
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
-    investment_amount = 5.00
+    data = request.get_json()
+    investment_amount = float(data.get('investment_amount', 5.00)) if data else 5.00
+
     category_map = {'main': 'hot_stock', 'monthly_dividend': 'monthly_dividend', 'high_yield_investment': 'high_yield', 'daily_investment': 'hot_stock'}
     category = category_map.get(portfolio_name)
 
@@ -128,11 +123,14 @@ def trigger_investment(portfolio_name):
         return jsonify({'status': 'error', 'message': 'No suitable stock found.'})
 
     try:
-        price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-        if not price or price <= 0: raise ValueError("Invalid price")
+        price_history = yf.Ticker(ticker).history(period="1d")
+        if price_history.empty or 'Close' not in price_history or price_history['Close'].iloc[-1] <= 0:
+            raise ValueError("Invalid or zero price from yfinance")
+
+        price = price_history['Close'].iloc[-1]
         shares = investment_amount / price
         execute_investment(portfolio_name, ticker, shares, price, investment_amount)
-        return jsonify({'status': 'success', 'message': f'Successfully invested in {ticker}.'})
+        return jsonify({'status': 'success', 'message': f'Successfully invested ${investment_amount:.2f} in {ticker}.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Failed to invest in {ticker}: {e}'}), 500
 
