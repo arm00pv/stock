@@ -6,6 +6,7 @@
     <title>Stock Picks</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
     <div class="container">
@@ -21,6 +22,7 @@
             <button class="tab-link" onclick="openTab(event, 'AIPortfolio')">AI-Guided Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
             <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
+            <button class="tab-link" onclick="openTab(event, 'Screener')">Stock Screener</button>
         </div>
 
         <!-- Daily Pick Tabs -->
@@ -112,12 +114,48 @@
             <div class="chart-container">
                 <canvas id="backtest-chart"></canvas>
             </div>
+            <div id="advanced-chart-container" style="height: 600px;"></div>
         </div>
 
         <!-- Settings Tab -->
         <div id="Settings" class="tab-content">
             <h1>AI Strategy Settings</h1>
             <div id="settings-container"></div>
+        </div>
+
+        <!-- Screener Tab -->
+        <div id="Screener" class="tab-content">
+            <h1>Stock Screener</h1>
+            <div class="screener-form">
+                <label for="screener-market-cap-min">Min Market Cap:</label>
+                <input type="number" id="screener-market-cap-min" value="0">
+                <label for="screener-market-cap-max">Max Market Cap:</label>
+                <input type="number" id="screener-market-cap-max" value="1000000000000">
+                <label for="screener-pe-ratio-min">Min P/E Ratio:</label>
+                <input type="number" id="screener-pe-ratio-min" value="0">
+                <label for="screener-pe-ratio-max">Max P/E Ratio:</label>
+                <input type="number" id="screener-pe-ratio-max" value="100">
+                <label for="screener-dividend-yield-min">Min Dividend Yield:</label>
+                <input type="number" id="screener-dividend-yield-min" value="0">
+                <label for="screener-dividend-yield-max">Max Dividend Yield:</label>
+                <input type="number" id="screener-dividend-yield-max" value="10">
+                <label for="screener-sector">Sector:</label>
+                <select id="screener-sector">
+                    <option value="">Any</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Financial Services">Financial Services</option>
+                    <option value="Consumer Cyclical">Consumer Cyclical</option>
+                    <option value="Industrials">Industrials</option>
+                    <option value="Consumer Defensive">Consumer Defensive</option>
+                    <option value="Basic Materials">Basic Materials</option>
+                    <option value="Real Estate">Real Estate</option>
+                    <option value="Energy">Energy</option>
+                    <option value="Utilities">Utilities</option>
+                </select>
+                <button onclick="runScreener()">Run Screener</button>
+            </div>
+            <table id="screener-results"><thead></thead><tbody></tbody></table>
         </div>
     </div>
 
@@ -305,54 +343,51 @@
                     <div class="portfolio-metric"><span class="label">Total Return</span><span class="value ${gainLossClass}">${data.total_return_pct.toFixed(2)}%</span></div>
                     <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${gainLoss.toFixed(2)}</span></div>`;
 
-                const ctx = document.getElementById('backtest-chart').getContext('2d');
-                if (backtestChart) {
-                    backtestChart.destroy();
-                }
-                backtestChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.portfolio_history.map(h => h.date),
-                        datasets: [
-                            {
-                                label: 'Portfolio Value',
-                                data: data.portfolio_history.map(h => h.total_value),
-                                borderColor: 'rgb(75, 192, 192)',
-                                tension: 0.1
-                            },
-                            {
-                                label: 'Short MA',
-                                data: data.short_ma,
-                                borderColor: 'rgb(255, 159, 64)',
-                                tension: 0.1,
-                                hidden: true
-                            },
-                            {
-                                label: 'Long MA',
-                                data: data.long_ma,
-                                borderColor: 'rgb(255, 99, 132)',
-                                tension: 0.1,
-                                hidden: true
-                            }
-                        ]
-                    },
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                ticks: {
-                                    callback: function(value, index, values) {
-                                        return '$' + value.toLocaleString();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
+                renderAdvancedChart(data);
             }).catch(err => {
                 summaryDiv.innerHTML = `<p>Could not run backtest.</p>`;
                 console.error('Error running backtest:', err);
             });
+        }
+
+        function renderAdvancedChart(data) {
+            const chartContainer = document.getElementById('advanced-chart-container');
+            chartContainer.innerHTML = '';
+            const chart = LightweightCharts.createChart(chartContainer, {
+                width: chartContainer.clientWidth,
+                height: 600,
+                layout: {
+                    backgroundColor: '#ffffff',
+                    textColor: 'rgba(33, 56, 77, 1)',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                    horzLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+                rightPriceScale: { borderColor: 'rgba(197, 203, 206, 0.8)' },
+                timeScale: { borderColor: 'rgba(197, 203, 206, 0.8)' },
+            });
+
+            const candleSeries = chart.addCandlestickSeries({
+              upColor: '#26a69a', downColor: '#ef5350', borderVisible: false,
+              wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+            });
+
+            const portfolioData = data.portfolio_history.map(item => ({
+                time: new Date(item.date).getTime() / 1000,
+                open: item.total_value,
+                high: item.total_value,
+                low: item.total_value,
+                close: item.total_value,
+            }));
+            candleSeries.setData(portfolioData);
+
+            const shortMaSeries = chart.addLineSeries({ color: 'rgba(255, 159, 64, 1)', lineWidth: 2 });
+            shortMaSeries.setData(data.short_ma.map((value, index) => ({ time: portfolioData[index].time, value })));
+
+            const longMaSeries = chart.addLineSeries({ color: 'rgba(255, 99, 132, 1)', lineWidth: 2 });
+            longMaSeries.setData(data.long_ma.map((value, index) => ({ time: portfolioData[index].time, value })));
         }
 
         function renderSettings() {
@@ -411,6 +446,50 @@
                             valueSpan.textContent = data[key];
                         });
                     });
+            });
+        }
+
+        function runScreener() {
+            const resultsTableBody = document.getElementById('screener-results').querySelector('tbody');
+            resultsTableBody.innerHTML = SPINNER_HTML;
+
+            const payload = {
+                market_cap_min: document.getElementById('screener-market-cap-min').value,
+                market_cap_max: document.getElementById('screener-market-cap-max').value,
+                pe_ratio_min: document.getElementById('screener-pe-ratio-min').value,
+                pe_ratio_max: document.getElementById('screener-pe-ratio-max').value,
+                dividend_yield_min: document.getElementById('screener-dividend-yield-min').value,
+                dividend_yield_max: document.getElementById('screener-dividend-yield-max').value,
+                sector: document.getElementById('screener-sector').value,
+            };
+
+            fetch(`${API_BASE_URL}/api/screener`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsTableHead = document.getElementById('screener-results').querySelector('thead');
+                resultsTableHead.innerHTML = `<tr><th>Ticker</th><th>Name</th><th>Market Cap</th><th>P/E Ratio</th><th>Dividend Yield</th><th>Sector</th></tr>`;
+                resultsTableBody.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(stock => {
+                        const row = resultsTableBody.insertRow();
+                        row.innerHTML = `
+                            <td>${createTickerLink(stock.ticker)}</td>
+                            <td>${stock.name}</td>
+                            <td>${stock.market_cap}</td>
+                            <td>${stock.pe_ratio}</td>
+                            <td>${stock.dividend_yield}</td>
+                            <td>${stock.sector}</td>`;
+                    });
+                } else {
+                    resultsTableBody.innerHTML = '<tr><td colspan="6">No results found.</td></tr>';
+                }
+            }).catch(err => {
+                resultsTableBody.innerHTML = '<tr><td colspan="6">An error occurred.</td></tr>';
+                console.error('Error running screener:', err);
             });
         }
 

@@ -25,7 +25,10 @@ def get_db_connection():
 def log_db_operation(func_name, err):
     logging.error(f"Database operation error in {func_name}: {err}")
 
+from models import init_user_db
+
 def init_db():
+    init_user_db()
     conn = get_db_connection()
     if not conn: return
     try:

@@ -4,3 +4,6 @@ yfinance
 python-dotenv
 pandas
 requests
+Flask-Login
+Flask-Bcrypt
+Flask-WTF

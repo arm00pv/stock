@@ -2,31 +2,117 @@ import os
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_bcrypt import Bcrypt
+from flask_wtf import FlaskForm
+from wtforms import StringField, PasswordField, SubmitField
+from wtforms.validators import DataRequired, Length, EqualTo, ValidationError
 from database import (
     init_db, get_all_portfolios_data,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
-    execute_investment, get_ai_settings, save_ai_settings, execute_sale
+    execute_investment, get_ai_settings, save_ai_settings, execute_sale, get_db_connection
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
 from decimal import Decimal
 from ai_trader import manage_ai_portfolio
 from cache import yf_download_cached
+from models import User
+from screener import screen_stocks
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_default_secret_key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
 
 # Initialize the database
 init_db()
 
 from constants import TICKER_CATEGORIES
 
+class RegistrationForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
+    password = PasswordField('Password', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Sign Up')
+
+    def validate_username(self, username):
+        conn = get_db_connection()
+        if not conn:
+            raise ValidationError('Database connection failed. Please try again later.')
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = %s", (username.data,))
+            user = cursor.fetchone()
+            if user:
+                raise ValidationError('That username is taken. Please choose a different one.')
+        conn.close()
+
+class LoginForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
+    password = PasswordField('Password', validators=[DataRequired()])
+    submit = SubmitField('Login')
+
+@app.route("/register", methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+        conn = get_db_connection()
+        if not conn:
+            flash('Database connection failed. Please try again later.', 'danger')
+            return render_template('register.html', title='Register', form=form)
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (form.username.data, hashed_password))
+        conn.commit()
+        conn.close()
+        flash('Your account has been created! You are now able to log in', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html', title='Register', form=form)
+
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = LoginForm()
+    if form.validate_on_submit():
+        conn = get_db_connection()
+        if not conn:
+            flash('Database connection failed. Please try again later.', 'danger')
+            return render_template('login.html', title='Login', form=form)
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = %s", (form.username.data,))
+            user_data = cursor.fetchone()
+        conn.close()
+        if user_data and bcrypt.check_password_hash(user_data['password'], form.password.data):
+            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
+            login_user(user, remember=True)
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('index'))
+        else:
+            flash('Login Unsuccessful. Please check username and password', 'danger')
+    return render_template('login.html', title='Login', form=form)
+
+@app.route("/logout")
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
@@ -204,6 +290,12 @@ def api_run_ai_trader():
         return jsonify({'status': 'success', 'message': 'AI portfolio management cycle complete.'})
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
+
+@app.route('/api/screener', methods=['POST'])
+def api_screener():
+    criteria = request.get_json()
+    results = screen_stocks(criteria)
+    return jsonify(results)
 
 @app.route('/api/settings/<category>', methods=['POST'])
 def api_save_settings(category):
