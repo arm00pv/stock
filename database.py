@@ -21,6 +21,8 @@ def init_db():
     conn = get_db_connection()
     if not conn: return
     cursor = conn.cursor()
+
+    # Portfolio Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS portfolio_summary (
             portfolio_name VARCHAR(50) PRIMARY KEY,
@@ -49,15 +51,71 @@ def init_db():
         )
     """)
 
+    # AI Settings Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_settings (
+            category VARCHAR(50) PRIMARY KEY,
+            momentum_weight DECIMAL(5, 2) NOT NULL,
+            value_weight DECIMAL(5, 2) NOT NULL,
+            ma_weight DECIMAL(5, 2) NOT NULL,
+            volatility_weight DECIMAL(5, 2) NOT NULL,
+            volume_weight DECIMAL(5, 2) NOT NULL,
+            sentiment_weight DECIMAL(5, 2) NOT NULL
+        )
+    """)
+
+    # Initialize portfolios
     portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
     for p_name in portfolios_to_init:
         cursor.execute('SELECT COUNT(*) FROM portfolio_summary WHERE portfolio_name = %s', (p_name,))
         if cursor.fetchone()[0] == 0:
             cursor.execute('INSERT INTO portfolio_summary (portfolio_name, cash_balance, total_invested) VALUES (%s, 0, 0)', (p_name,))
 
+    # Initialize default AI settings
+    categories = ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield']
+    default_weights = (0.20, 0.20, 0.20, 0.15, 0.05, 0.20)
+    for category in categories:
+        cursor.execute('SELECT COUNT(*) FROM ai_settings WHERE category = %s', (category,))
+        if cursor.fetchone()[0] == 0:
+            sql = "INSERT INTO ai_settings (category, momentum_weight, value_weight, ma_weight, volatility_weight, volume_weight, sentiment_weight) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            cursor.execute(sql, (category,) + default_weights)
+
     conn.commit()
     cursor.close()
     conn.close()
+
+def get_ai_settings(category):
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM ai_settings WHERE category = %s", (category,))
+    settings = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return settings
+
+def save_ai_settings(category, weights):
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    sql = """
+        UPDATE ai_settings
+        SET momentum_weight = %s, value_weight = %s, ma_weight = %s,
+            volatility_weight = %s, volume_weight = %s, sentiment_weight = %s
+        WHERE category = %s
+    """
+    try:
+        cursor.execute(sql, (
+            weights['momentum_weight'], weights['value_weight'], weights['ma_weight'],
+            weights['volatility_weight'], weights['volume_weight'], weights['sentiment_weight'],
+            category
+        ))
+        conn.commit()
+    except mysql.connector.Error as err:
+        print(f"Error saving AI settings: {err}")
+    finally:
+        cursor.close()
+        conn.close()
 
 def save_daily_pick(category, ticker):
     conn = get_db_connection()

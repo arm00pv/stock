@@ -1,9 +1,0 @@
-2025-09-20 09:37:07,381 - INFO - Starting AI recommendation for category: hot_stock
-2025-09-20 09:37:07,387 - INFO - Recently picked: set()
-2025-09-20 09:37:07,387 - INFO - Processing ticker: AAPL
-2025-09-20 09:37:07,681 - INFO - Scored AAPL: 75.78748756451867
-2025-09-20 09:37:07,681 - INFO - Processing ticker: MSFT
-2025-09-20 09:37:07,762 - INFO - Scored MSFT: 25.290181969354986
-2025-09-20 09:37:07,762 - INFO - Processing ticker: GOOG
-2025-09-20 09:37:07,871 - INFO - Scored GOOG: 28.900593221424636
-2025-09-20 09:37:07,871 - INFO - Top scored ticker: AAPL

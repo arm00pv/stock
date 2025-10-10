@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Picks</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -17,6 +18,8 @@
             <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Dividend Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Best Pick Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
+            <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
+            <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
         </div>
 
         <!-- Daily Pick Tabs -->
@@ -70,11 +73,46 @@
             <h2>Holdings</h2>
             <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
         </div>
+
+        <!-- Backtesting Tab -->
+        <div id="Backtesting" class="tab-content">
+            <h1>Backtest AI Strategy</h1>
+            <div class="backtest-form">
+                <label for="bt-start-date">Start Date:</label>
+                <input type="date" id="bt-start-date" value="2023-01-01">
+                <label for="bt-end-date">End Date:</label>
+                <input type="date" id="bt-end-date" value="2023-12-31">
+                <label for="bt-capital">Initial Capital:</label>
+                <input type="number" id="bt-capital" value="10000">
+                <label for="bt-investment">Daily Investment:</label>
+                <input type="number" id="bt-investment" value="100">
+                <label for="bt-category">Category:</label>
+                <select id="bt-category">
+                    <option value="hot_stock">Hot Stocks</option>
+                    <option value="penny_stock">Penny Stocks</option>
+                    <option value="monthly_dividend">Monthly Dividend</option>
+                    <option value="high_yield">High Yield</option>
+                </select>
+                <button onclick="runBacktest()">Run Backtest</button>
+            </div>
+            <div id="backtest-results-summary" class="portfolio-summary"></div>
+            <div class="chart-container">
+                <canvas id="backtest-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="Settings" class="tab-content">
+            <h1>AI Strategy Settings</h1>
+            <div id="settings-container"></div>
+        </div>
     </div>
 
     <script>
         const API_BASE_URL = "{{ url_for('index', _external=False) }}".replace(/\/$/, '');
         const SPINNER_HTML = '<div class="spinner"></div>';
+        const CATEGORIES = ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield'];
+        const WEIGHT_KEYS = ['momentum_weight', 'value_weight', 'ma_weight', 'volatility_weight', 'volume_weight', 'sentiment_weight'];
 
         function openTab(evt, tabName) {
             let i, tabcontent, tablinks;
@@ -127,7 +165,7 @@
                 <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
 
             holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th></tr>`;
-            holdingsTableBody.innerHTML = ''; // Clear previous content
+            holdingsTableBody.innerHTML = '';
             if (data.holdings && data.holdings.length > 0) {
                 data.holdings.forEach(h => {
                     const row = holdingsTableBody.insertRow();
@@ -168,9 +206,168 @@
                 });
         }
 
+        let backtestChart = null;
+
+        function runBacktest() {
+            const summaryDiv = document.getElementById('backtest-results-summary');
+            summaryDiv.innerHTML = SPINNER_HTML;
+
+            const payload = {
+                start_date: document.getElementById('bt-start-date').value,
+                end_date: document.getElementById('bt-end-date').value,
+                initial_capital: document.getElementById('bt-capital').value,
+                investment_amount: document.getElementById('bt-investment').value,
+                category: document.getElementById('bt-category').value,
+            };
+
+            fetch(`${API_BASE_URL}/api/backtest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    summaryDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+                    return;
+                }
+
+                const gainLoss = data.final_value - data.initial_capital;
+                const gainLossClass = gainLoss >= 0 ? 'positive-return' : 'negative-return';
+                const gainLossSign = gainLoss >= 0 ? '+' : '';
+
+                summaryDiv.innerHTML = `
+                    <div class="portfolio-metric"><span class="label">Initial Capital</span><span class="value">$${data.initial_capital.toFixed(2)}</span></div>
+                    <div class="portfolio-metric"><span class="label">Final Value</span><span class="value">$${data.final_value.toFixed(2)}</span></div>
+                    <div class="portfolio-metric"><span class="label">Total Return</span><span class="value ${gainLossClass}">${data.total_return_pct.toFixed(2)}%</span></div>
+                    <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${gainLoss.toFixed(2)}</span></div>`;
+
+                const ctx = document.getElementById('backtest-chart').getContext('2d');
+                if (backtestChart) {
+                    backtestChart.destroy();
+                }
+                backtestChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.portfolio_history.map(h => h.date),
+                        datasets: [{
+                            label: 'Portfolio Value',
+                            data: data.portfolio_history.map(h => h.total_value),
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value, index, values) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }).catch(err => {
+                summaryDiv.innerHTML = `<p>Could not run backtest.</p>`;
+                console.error('Error running backtest:', err);
+            });
+        }
+
+        function renderSettings() {
+            const container = document.getElementById('settings-container');
+            container.innerHTML = '';
+            CATEGORIES.forEach(category => {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'settings-category';
+                categoryDiv.innerHTML = `<h2>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h2>`;
+
+                const form = document.createElement('form');
+                form.id = `settings-form-${category}`;
+
+                WEIGHT_KEYS.forEach(key => {
+                    const label = document.createElement('label');
+                    label.htmlFor = `slider-${category}-${key}`;
+                    label.textContent = `${key.replace(/_/g, ' ')}: `;
+
+                    const slider = document.createElement('input');
+                    slider.type = 'range';
+                    slider.id = `slider-${category}-${key}`;
+                    slider.name = key;
+                    slider.min = 0;
+                    slider.max = 1;
+                    slider.step = 0.05;
+
+                    const valueSpan = document.createElement('span');
+                    valueSpan.id = `value-${category}-${key}`;
+
+                    slider.oninput = () => { valueSpan.textContent = slider.value; };
+
+                    form.appendChild(label);
+                    form.appendChild(slider);
+                    form.appendChild(valueSpan);
+                    form.appendChild(document.createElement('br'));
+                });
+
+                const saveButton = document.createElement('button');
+                saveButton.textContent = 'Save Settings';
+                saveButton.onclick = (e) => {
+                    e.preventDefault();
+                    saveSettings(category);
+                };
+                form.appendChild(saveButton);
+
+                categoryDiv.appendChild(form);
+                container.appendChild(categoryDiv);
+
+                fetch(`${API_BASE_URL}/api/settings/${category}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        WEIGHT_KEYS.forEach(key => {
+                            const slider = document.getElementById(`slider-${category}-${key}`);
+                            const valueSpan = document.getElementById(`value-${category}-${key}`);
+                            slider.value = data[key];
+                            valueSpan.textContent = data[key];
+                        });
+                    });
+            });
+        }
+
+        function saveSettings(category) {
+            const form = document.getElementById(`settings-form-${category}`);
+            const payload = {};
+            let totalWeight = 0;
+            WEIGHT_KEYS.forEach(key => {
+                const value = parseFloat(form.elements[key].value);
+                payload[key] = value;
+                totalWeight += value;
+            });
+
+            if (Math.abs(totalWeight - 1.0) > 0.01) {
+                alert('Total weights must sum to 1.0');
+                return;
+            }
+
+            fetch(`${API_BASE_URL}/api/settings/${category}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(response => response.json())
+              .then(data => {
+                  if(data.status === 'success') {
+                      alert('Settings saved successfully!');
+                  } else {
+                      alert('Error saving settings: ' + data.error);
+                  }
+              });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield'].forEach(populatePicks);
+            CATEGORIES.forEach(populatePicks);
             populateAllPortfolios();
+            renderSettings();
         });
     </script>
 </body>
