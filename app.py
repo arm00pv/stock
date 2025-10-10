@@ -39,24 +39,46 @@ def api_daily_pick(category_key):
     if category_key not in TICKER_CATEGORIES:
         return jsonify({'error': 'Invalid category'}), 404
 
-    history = get_pick_history_for_category(category_key)
+    history_data = get_pick_history_for_category(category_key)
     today_str = datetime.now().strftime('%Y-%m-%d')
-    todays_pick_ticker = None
+    todays_pick = None
 
-    if history:
-        latest_pick_date_str = history[0]['pick_date'].strftime('%Y-%m-%d')
-        if latest_pick_date_str == today_str:
-            todays_pick_ticker = history[0]['ticker']
-
-    if not todays_pick_ticker:
+    # Identify today's pick or get a new one
+    if history_data and history_data[0]['pick_date'].strftime('%Y-%m-%d') == today_str:
+        todays_pick = {'ticker': history_data[0]['ticker']}
+    else:
         price_limit = 5 if category_key == 'penny_stock' else None
-        todays_pick_ticker = get_ai_recommendation(category_key, TICKER_CATEGORIES.get(category_key, []), price_limit)
-        if todays_pick_ticker:
-            save_daily_pick(category_key, todays_pick_ticker)
-            history = get_pick_history_for_category(category_key)
+        new_ticker = get_ai_recommendation(category_key, TICKER_CATEGORIES.get(category_key, []), price_limit)
+        if new_ticker:
+            save_daily_pick(category_key, new_ticker)
+            todays_pick = {'ticker': new_ticker}
+            history_data = get_pick_history_for_category(category_key) # Refresh history
 
-    latest_pick_to_display = history[0]['ticker'] if history else "N/A"
-    return jsonify({'ticker': latest_pick_to_display, 'history': history})
+    # Efficiently fetch all historical data in one batch
+    all_tickers = {pick['ticker'] for pick in history_data}
+    if todays_pick:
+        all_tickers.add(todays_pick['ticker'])
+
+    changes = {}
+    if all_tickers:
+        try:
+            hist = yf.download(list(all_tickers), period="2d", progress=False, raise_errors=False)
+            if not hist.empty:
+                close_prices = hist['Close']
+                if len(close_prices) > 1:
+                    change_pct = ((close_prices.iloc[-1] - close_prices.iloc[-2]) / close_prices.iloc[-2]) * 100
+                    changes = change_pct.dropna().to_dict()
+        except Exception as e:
+            print(f"Error fetching batch daily changes: {e}")
+
+    # Assign changes
+    if todays_pick:
+        todays_pick['change_pct'] = changes.get(todays_pick['ticker'], 0)
+
+    for pick in history_data:
+        pick['change_pct'] = changes.get(pick['ticker'], 0)
+
+    return jsonify({'todays_pick': todays_pick, 'history': history_data})
 
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
@@ -66,9 +88,18 @@ def all_portfolios_data():
 
         price_data = {}
         if all_tickers:
-            data = yf.download(list(all_tickers), period='1d', progress=False)
-            if not data.empty and 'Close' in data and not data['Close'].empty:
-                price_data = data['Close'].iloc[-1].to_dict() if len(all_tickers) > 1 else {list(all_tickers)[0]: data['Close'].iloc[-1]}
+            data = yf.download(list(all_tickers), period='1d', progress=False, raise_errors=False)
+            if not data.empty and 'Close' in data:
+                close_prices = data['Close']
+                if isinstance(close_prices, pd.Series):
+                    # Single ticker case
+                    if not close_prices.empty and not pd.isna(close_prices.iloc[-1]):
+                        price_data[list(all_tickers)[0]] = close_prices.iloc[-1]
+                else:
+                    # Multiple tickers case
+                    if not close_prices.empty:
+                        last_prices = close_prices.iloc[-1]
+                        price_data = last_prices.dropna().to_dict()
 
         response_data = {}
         for name, summary in summaries.items():
@@ -76,7 +107,10 @@ def all_portfolios_data():
             total_market_value = 0.0
 
             for holding in holdings:
-                current_price = price_data.get(holding['ticker'], float(holding['purchase_price']))
+                current_price = price_data.get(holding['ticker'])
+                if not current_price or pd.isna(current_price):
+                    current_price = float(holding['purchase_price'])
+
                 holding.update({
                     'shares': float(holding['shares']),
                     'purchase_price': float(holding['purchase_price']),

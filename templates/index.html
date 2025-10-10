@@ -124,8 +124,12 @@
             evt.currentTarget.className += " active";
         }
 
-        function createTickerLink(ticker) {
-            return !ticker || ticker.includes('Error') ? `<span>${ticker}</span>` : `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
+        function createTickerLink(ticker, change_pct) {
+            if (!ticker || ticker.includes('Error')) {
+                return `<span>${ticker}</span>`;
+            }
+            const perfClass = change_pct > 0 ? 'positive-return' : (change_pct < 0 ? 'negative-return' : '');
+            return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank" class="${perfClass}">${ticker}</a>`;
         }
 
         function populatePicks(categoryKey) {
@@ -137,11 +141,16 @@
             fetch(`${API_BASE_URL}/api/daily-pick/${categoryKey}`)
                 .then(response => response.json())
                 .then(data => {
-                    dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}</h2>`;
+                    if (data.todays_pick) {
+                        dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.todays_pick.ticker, data.todays_pick.change_pct)}</h2>`;
+                    } else {
+                        dailyPickDiv.innerHTML = `<h2>No pick for today.</h2>`;
+                    }
+
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
                             const li = document.createElement('li');
-                            li.innerHTML = `${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker)}`;
+                            li.innerHTML = `${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker, pick.change_pct)}`;
                             historicalPicksUl.appendChild(li);
                         });
                     }
