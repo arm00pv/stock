@@ -21,6 +21,7 @@
             <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
             <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
             <button class="tab-link" onclick="openTab(event, 'Screener')">Stock Screener</button>
+            <button class="tab-link" onclick="openTab(event, 'AIPerformance')">AI Performance</button>
         </div>
 
         <!-- Daily Pick Tabs -->
@@ -145,6 +146,15 @@
                 <button onclick="runScreener()">Run Screener</button>
             </div>
             <table id="screener-results"><thead></thead><tbody></tbody></table>
+        </div>
+
+        <!-- AI Performance Tab -->
+        <div id="AIPerformance" class="tab-content">
+            <h1>AI Performance Dashboard</h1>
+            <div id="ai-performance-summary" class="portfolio-summary"></div>
+            <div class="chart-container">
+                <canvas id="ai-performance-chart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -467,6 +477,59 @@
             });
         }
 
+        function populateAIPerformance() {
+            const summaryDiv = document.getElementById('ai-performance-summary');
+            summaryDiv.innerHTML = SPINNER_HTML;
+
+            fetch(`${API_BASE_URL}/api/ai-performance`)
+                .then(response => response.json())
+                .then(data => {
+                    const gainLossClass = data.total_return_pct >= 0 ? 'positive-return' : 'negative-return';
+                    summaryDiv.innerHTML = `
+                        <div class="portfolio-metric"><span class="label">Total Return</span><span class="value ${gainLossClass}">${data.total_return_pct.toFixed(2)}%</span></div>
+                        <div class="portfolio-metric"><span class="label">Win/Loss Ratio</span><span class="value">${data.win_loss_ratio.toFixed(2)}</span></div>
+                        <div class="portfolio-metric"><span class="label">Performance vs S&P 500</span><span class="value ${data.vs_market >= 0 ? 'positive-return' : 'negative-return'}">${data.vs_market.toFixed(2)}%</span></div>
+                    `;
+
+                    const ctx = document.getElementById('ai-performance-chart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.portfolio_history.map(h => h.date),
+                            datasets: [
+                                {
+                                    label: 'AI Portfolio Value',
+                                    data: data.portfolio_history.map(h => h.total_value),
+                                    borderColor: 'rgb(75, 192, 192)',
+                                    tension: 0.1
+                                },
+                                {
+                                    label: 'S&P 500',
+                                    data: data.market_history.map(h => h.total_value),
+                                    borderColor: 'rgb(255, 99, 132)',
+                                    tension: 0.1
+                                }
+                            ]
+                        },
+                        options: {
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    ticks: {
+                                        callback: function(value, index, values) {
+                                            return '$' + value.toLocaleString();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }).catch(err => {
+                    summaryDiv.innerHTML = `<p>Could not load AI performance data.</p>`;
+                    console.error('Error fetching AI performance data:', err);
+                });
+        }
+
         function saveSettings(category) {
             const form = document.getElementById(`settings-form-${category}`);
             const payload = {};
@@ -499,6 +562,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             CATEGORIES.forEach(populatePicks);
             populateAllPortfolios();
+            populateAIPerformance();
             renderSettings();
         });
     </script>

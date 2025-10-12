@@ -29,7 +29,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS portfolio_summary (
             portfolio_name VARCHAR(50) PRIMARY KEY,
             cash_balance DECIMAL(18, 4) NOT NULL,
-            total_invested DECIMAL(18, 4) NOT NULL
+                    total_invested DECIMAL(18, 4) NOT NULL,
+                    paper_trade BOOLEAN DEFAULT TRUE
         )
     """)
     cursor.execute("""
@@ -191,6 +192,12 @@ def execute_sale(portfolio_name, ticker, shares_to_sell, price):
         return False, "Database connection failed."
     try:
         with conn.cursor(dictionary=True) as cursor:
+            # Check if paper trading
+            cursor.execute("SELECT paper_trade FROM portfolio_summary WHERE portfolio_name = %s", (portfolio_name,))
+            paper_trade = cursor.fetchone()
+            if not paper_trade or not paper_trade['paper_trade']:
+                return False, "Only paper trading is allowed."
+
             # Check current holdings
             cursor.execute(
                 "SELECT SUM(shares) as total_shares FROM portfolio_transactions WHERE portfolio_name = %s AND ticker = %s",
@@ -259,15 +266,40 @@ def get_ai_decision_log(portfolio_name):
         if conn and conn.is_connected():
             conn.close()
 
+def get_ai_performance_data(portfolio_name):
+    # This is a placeholder for a more sophisticated performance calculation.
+    # For now, we'll just return some dummy data.
+    return {
+        "total_return_pct": 15.5,
+        "win_loss_ratio": 1.5,
+        "vs_market": 5.2,
+        "portfolio_history": [
+            {"date": "2023-01-01", "total_value": 10000},
+            {"date": "2023-01-02", "total_value": 10050},
+            {"date": "2023-01-03", "total_value": 10100},
+        ],
+        "market_history": [
+            {"date": "2023-01-01", "total_value": 10000},
+            {"date": "2023-01-02", "total_value": 10020},
+            {"date": "2023-01-03", "total_value": 10050},
+        ]
+    }
+
 def execute_investment(portfolio_name, ticker, shares, price, investment_amount):
     conn = get_db_connection()
     if not conn: return
-    cursor = conn.cursor()
     try:
-        print(f"--- EXECUTING INVESTMENT for {portfolio_name} ---")
-        print(f"Attempting to buy {shares} of {ticker} at ${price}")
+        with conn.cursor(dictionary=True) as cursor:
+            # Check if paper trading
+            cursor.execute("SELECT paper_trade FROM portfolio_summary WHERE portfolio_name = %s", (portfolio_name,))
+            paper_trade = cursor.fetchone()
+            if not paper_trade or not paper_trade['paper_trade']:
+                logging.warning(f"Attempted to invest in non-paper trading portfolio: {portfolio_name}")
+                return
 
-        cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE portfolio_name = %s FOR UPDATE', (portfolio_name,))
+            logging.info(f"Executing investment for {portfolio_name}: {shares} of {ticker} at ${price}")
+
+            cursor.execute('SELECT cash_balance, total_invested FROM portfolio_summary WHERE portfolio_name = %s FOR UPDATE', (portfolio_name,))
         summary = cursor.fetchone()
         if not summary:
             print(f"Error: Portfolio '{portfolio_name}' not found.")

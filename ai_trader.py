@@ -11,8 +11,8 @@ def calculate_sell_score(ticker, current_score):
     Calculates a dynamic sell score based on the AI score and recent performance.
     """
     try:
-        hist = yf_download_cached(ticker, period="3mo")
-        if hist.empty:
+        hist = yf_download_cached(ticker, period="1y")
+        if hist.empty or len(hist) < 252:
             return current_score
 
         # Calculate drop from recent peak
@@ -20,13 +20,31 @@ def calculate_sell_score(ticker, current_score):
         current_price = hist['Close'].iloc[-1]
         peak_drop_pct = (current_price - peak_price) / peak_price if peak_price > 0 else 0
 
-        # Combine AI score with performance drop (e.g., penalize for large drops)
-        # The more it drops, the lower the score becomes
-        sell_score = current_score + (peak_drop_pct * 0.5) # Weighting the drop
+        # Calculate historical volatility
+        returns = hist['Close'].pct_change().dropna()
+        volatility = returns.std() * (252**0.5)
+
+        # Calculate Beta
+        market_hist = yf_download_cached('^GSPC', period="1y")
+        market_returns = market_hist['Close'].pct_change().dropna()
+        covariance = returns.cov(market_returns)
+        beta = covariance / market_returns.var()
+
+        # Combine AI score with performance drop, volatility, and beta
+        sell_score = current_score + (peak_drop_pct * 0.3) - (volatility * 0.1) - (beta * 0.1)
         return sell_score
     except Exception as e:
         logging.error(f"Error calculating sell score for {ticker}: {e}")
         return current_score
+
+def get_market_sentiment():
+    """
+    Analyzes the overall market sentiment.
+    """
+    # For simplicity, we'll use a major index as a proxy for the market
+    market_ticker = '^GSPC'
+    sentiment_score = get_ai_recommendation_score('hot_stock', market_ticker)
+    return sentiment_score
 
 def manage_ai_portfolio():
     """
@@ -37,6 +55,10 @@ def manage_ai_portfolio():
 
     portfolio_name = 'ai_guided_portfolio'
     holdings = get_portfolio_holdings(portfolio_name)
+
+    market_sentiment = get_market_sentiment()
+    # Adjust sell threshold based on market sentiment
+    sell_threshold = 0.4 - (market_sentiment * 0.1) # More aggressive selling in a bear market
 
     total_proceeds = 0
     if not holdings:
@@ -51,8 +73,8 @@ def manage_ai_portfolio():
         sell_score = calculate_sell_score(ticker, current_ai_score)
 
         # Define a threshold for selling
-        if sell_score < 0.4: # More nuanced threshold
-            logging.info(f"Selling {ticker} due to low dynamic score: {sell_score}")
+        if sell_score < sell_threshold:
+            logging.info(f"Selling {ticker} due to low dynamic score: {sell_score} (Threshold: {sell_threshold})")
             shares_to_sell = holding['shares']
 
             try:

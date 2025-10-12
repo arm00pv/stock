@@ -1,8 +1,0 @@
-2025-10-12 10:14:18,902 - INFO - Starting AI recommendation for category: hot_stock
-2025-10-12 10:14:20,641 - INFO - Top scored ticker: MSFT with score 8.889543105366778
-2025-10-12 10:14:20,642 - INFO - AI portfolio invested in MSFT.
-2025-10-12 10:14:20,643 - INFO - Starting AI portfolio management cycle.
-2025-10-12 10:14:20,643 - INFO - AI portfolio is empty. Investing in a new stock.
-2025-10-12 10:14:20,644 - INFO - Starting AI portfolio management cycle.
-2025-10-12 10:14:20,644 - INFO - Selling AAPL due to low dynamic score: 0.3
-2025-10-12 10:14:20,847 - ERROR - Failed to sell AAPL: not enough values to unpack (expected 2, got 0)

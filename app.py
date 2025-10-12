@@ -13,7 +13,8 @@ from wtforms.validators import DataRequired, Length, EqualTo, ValidationError
 from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
-    execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale
+    execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
+    get_ai_performance_data
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
@@ -282,6 +283,12 @@ def api_screener():
     criteria = request.get_json()
     results = screen_stocks(criteria)
     return jsonify(results)
+
+@app.route('/api/ai-performance')
+@login_required
+def api_ai_performance():
+    performance_data = get_ai_performance_data('ai_guided_portfolio')
+    return jsonify(performance_data)
 
 @app.route('/api/run-ai-trader', methods=['POST'])
 @login_required
