@@ -21,7 +21,21 @@ def run(playwright):
 
     # Go to the settings tab
     page.get_by_role("button", name="Settings").click()
-    page.screenshot(path="jules-scratch/verification/settings_tab.png")
+
+    # Change the risk profile for the main portfolio
+    page.get_by_label("Main:").select_option("Aggressive")
+
+    # Go to the main portfolio tab
+    page.get_by_role("button", name="Main").first.click()
+
+    # Click the rebalance button
+    page.get_by_role("button", name="Rebalance").first.click()
+
+    # Wait for the modal to appear
+    expect(page.locator(".modal")).to_be_visible()
+
+    # Take a screenshot of the rebalancing modal
+    page.screenshot(path="jules-scratch/verification/rebalancing_modal.png")
 
     browser.close()
 

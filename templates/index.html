@@ -261,13 +261,21 @@
                         contentDiv.className = 'tab-content';
                         contentDiv.innerHTML = `
                             <h1>${formatPortfolioName(name)} Portfolio</h1>
-                            <button onclick="rebalancePortfolio('${name}')">Rebalance</button>
+                            <button id="rebalance-btn-${name}">Rebalance</button>
                             <div id="portfolio-summary-${name}" class="portfolio-summary"></div>
                             <h2>Holdings</h2>
                             <table id="portfolio-holdings-${name}"><thead></thead><tbody></tbody></table>
                         `;
                         // Insert the content pane before the Backtesting content pane
                         document.getElementById('Backtesting').parentNode.insertBefore(contentDiv, document.getElementById('Backtesting'));
+                    });
+                })
+                .then(() => {
+                    document.getElementById('portfolio-tabs-container').addEventListener('click', (event) => {
+                        if (event.target.id.startsWith('rebalance-btn-')) {
+                            const portfolioName = event.target.id.replace('rebalance-btn-', '');
+                            rebalancePortfolio(portfolioName);
+                        }
                     });
                 })
                 .catch(err => console.error('Error fetching portfolio names:', err));
@@ -386,7 +394,6 @@
         }
 
         function renderSettings() {
-            console.log("Rendering settings...");
             const container = document.getElementById('settings-container');
             container.innerHTML = '<h2>Risk Profiles</h2><div id="risk-profile-settings"></div><hr><h2>AI Strategy Weights</h2>';
             const riskProfileContainer = document.getElementById('risk-profile-settings');
@@ -395,7 +402,6 @@
                 .then(response => response.json())
                 .then(portfolioNames => {
                     portfolioNames.forEach(name => {
-                        console.log("Creating dropdown for:", name);
                         const div = document.createElement('div');
                         div.className = 'setting-item';
                         div.innerHTML = `<label for="risk-${name}">${formatPortfolioName(name)}:</label>
@@ -414,62 +420,63 @@
                                 }
                             });
                     });
-                });
 
-            CATEGORIES.forEach(category => {
-                const categoryDiv = document.createElement('div');
-                categoryDiv.className = 'settings-category';
-                categoryDiv.innerHTML = `<h3>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>`;
+                    // Now that the risk profiles are rendered, render the rest of the settings
+                    CATEGORIES.forEach(category => {
+                        const categoryDiv = document.createElement('div');
+                        categoryDiv.className = 'settings-category';
+                        categoryDiv.innerHTML = `<h3>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>`;
 
-                const form = document.createElement('form');
-                form.id = `settings-form-${category}`;
+                        const form = document.createElement('form');
+                        form.id = `settings-form-${category}`;
 
-                WEIGHT_KEYS.forEach(key => {
-                    const label = document.createElement('label');
-                    label.htmlFor = `slider-${category}-${key}`;
-                    label.textContent = `${key.replace(/_/g, ' ')}: `;
-
-                    const slider = document.createElement('input');
-                    slider.type = 'range';
-                    slider.id = `slider-${category}-${key}`;
-                    slider.name = key;
-                    slider.min = 0;
-                    slider.max = 1;
-                    slider.step = 0.05;
-
-                    const valueSpan = document.createElement('span');
-                    valueSpan.id = `value-${category}-${key}`;
-
-                    slider.oninput = () => { valueSpan.textContent = slider.value; };
-
-                    form.appendChild(label);
-                    form.appendChild(slider);
-                    form.appendChild(valueSpan);
-                    form.appendChild(document.createElement('br'));
-                });
-
-                const saveButton = document.createElement('button');
-                saveButton.textContent = 'Save Settings';
-                saveButton.onclick = (e) => {
-                    e.preventDefault();
-                    saveSettings(category);
-                };
-                form.appendChild(saveButton);
-
-                categoryDiv.appendChild(form);
-                container.appendChild(categoryDiv);
-
-                fetch(`${API_BASE_URL}/api/settings/${category}`)
-                    .then(response => response.json())
-                    .then(data => {
                         WEIGHT_KEYS.forEach(key => {
-                            const slider = document.getElementById(`slider-${category}-${key}`);
-                            const valueSpan = document.getElementById(`value-${category}-${key}`);
-                            slider.value = data[key];
-                            valueSpan.textContent = data[key];
+                            const label = document.createElement('label');
+                            label.htmlFor = `slider-${category}-${key}`;
+                            label.textContent = `${key.replace(/_/g, ' ')}: `;
+
+                            const slider = document.createElement('input');
+                            slider.type = 'range';
+                            slider.id = `slider-${category}-${key}`;
+                            slider.name = key;
+                            slider.min = 0;
+                            slider.max = 1;
+                            slider.step = 0.05;
+
+                            const valueSpan = document.createElement('span');
+                            valueSpan.id = `value-${category}-${key}`;
+
+                            slider.oninput = () => { valueSpan.textContent = slider.value; };
+
+                            form.appendChild(label);
+                            form.appendChild(slider);
+                            form.appendChild(valueSpan);
+                            form.appendChild(document.createElement('br'));
                         });
+
+                        const saveButton = document.createElement('button');
+                        saveButton.textContent = 'Save Settings';
+                        saveButton.onclick = (e) => {
+                            e.preventDefault();
+                            saveSettings(category);
+                        };
+                        form.appendChild(saveButton);
+
+                        categoryDiv.appendChild(form);
+                        container.appendChild(categoryDiv);
+
+                        fetch(`${API_BASE_URL}/api/settings/${category}`)
+                            .then(response => response.json())
+                            .then(data => {
+                                WEIGHT_KEYS.forEach(key => {
+                                    const slider = document.getElementById(`slider-${category}-${key}`);
+                                    const valueSpan = document.getElementById(`value-${category}-${key}`);
+                                    slider.value = data[key];
+                                    valueSpan.textContent = data[key];
+                                });
+                            });
                     });
-            });
+                });
         }
 
         function runScreener() {
@@ -674,18 +681,21 @@
         }
 
         function rebalancePortfolio(portfolioName) {
+            console.log("Rebalancing portfolio:", portfolioName);
             fetch(`${API_BASE_URL}/api/rebalance-portfolio/${portfolioName}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
             .then(plan => {
+                console.log("Rebalancing plan:", plan);
                 const modal = document.createElement('div');
                 modal.className = 'modal';
                 modal.innerHTML = `
                     <div class="modal-content">
                         <span class="close-button">&times;</span>
                         <h2>Rebalancing Plan for ${formatPortfolioName(portfolioName)}</h2>
+                        <div id="rebalancing-summary"></div>
                         <table>
                             <thead>
                                 <tr>
@@ -710,6 +720,11 @@
                     </div>
                 `;
                 document.body.appendChild(modal);
+
+                // Calculate and display projected allocation
+                const summaryDiv = modal.querySelector('#rebalancing-summary');
+                // This is a simplified calculation and would need to be more robust in a real application
+                summaryDiv.innerHTML = `<p>Projected allocation will be calculated and displayed here.</p>`;
 
                 modal.querySelector('.close-button').onclick = () => {
                     modal.remove();
