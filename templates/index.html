@@ -679,13 +679,58 @@
                 headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    alert('Portfolio rebalancing initiated!');
-                    populateAllPortfolios();
-                } else {
-                    alert('Error initiating rebalancing: ' + data.error);
-                }
+            .then(plan => {
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <span class="close-button">&times;</span>
+                        <h2>Rebalancing Plan for ${formatPortfolioName(portfolioName)}</h2>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Action</th>
+                                    <th>Ticker</th>
+                                    <th>Shares</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${plan.map(trade => `
+                                    <tr>
+                                        <td>${trade.action}</td>
+                                        <td>${trade.ticker}</td>
+                                        <td>${trade.shares}</td>
+                                        <td>$${trade.amount}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <button id="confirm-rebalance">Confirm Rebalance</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                modal.querySelector('.close-button').onclick = () => {
+                    modal.remove();
+                };
+                modal.querySelector('#confirm-rebalance').onclick = () => {
+                    fetch(`${API_BASE_URL}/api/execute-rebalance/${portfolioName}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ plan: plan })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.status === 'success') {
+                            alert('Rebalancing trades executed successfully!');
+                            populateAllPortfolios();
+                        } else {
+                            alert('Error executing rebalance: ' + data.error);
+                        }
+                        modal.remove();
+                    });
+                };
             });
         }
 

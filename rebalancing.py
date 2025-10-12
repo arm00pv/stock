@@ -17,68 +17,69 @@ def get_target_allocation(risk_profile):
 
 def rebalance_portfolio(portfolio_name):
     """
-    Rebalances a portfolio to match its target asset allocation.
+    Calculates the trades needed to rebalance a portfolio.
+    Returns a list of proposed trades, not executing them.
     """
-    logging.info(f"Starting rebalancing for portfolio: {portfolio_name}")
-
+    logging.info(f"Calculating rebalancing plan for portfolio: {portfolio_name}")
     risk_profile = get_risk_profile(portfolio_name)
     if not risk_profile:
-        logging.warning(f"Could not retrieve risk profile for {portfolio_name}. Skipping rebalancing.")
-        return
+        logging.warning(f"Could not retrieve risk profile for {portfolio_name}.")
+        return []
 
     target_allocation = get_target_allocation(risk_profile)
     holdings = get_portfolio_holdings(portfolio_name)
 
-    # For simplicity, we'll assume all current holdings are stocks
-    # and we'll use a placeholder for bond ETFs
-    BOND_ETF = 'BND'
+    BOND_ETF = 'BND' # Placeholder for bond ETF
+    CASH_PROXY = 'USD' # Placeholder for cash
 
+    # Calculate current values
     total_value = 0
-    stock_value = 0
-    bond_value = 0
+    asset_values = {'stocks': 0, 'bonds': 0}
+    current_prices = {}
 
     for holding in holdings:
         try:
-            price_history = yf_download_cached(holding['ticker'], period="1d")
-            if not price_history.empty:
-                price = price_history['Close'].iloc[-1]
-                value = holding['shares'] * price
-                total_value += value
-                if holding['ticker'] == BOND_ETF:
-                    bond_value += value
-                else:
-                    stock_value += value
+            price = yf_download_cached(holding['ticker'], period="1d")['Close'].iloc[-1]
+            current_prices[holding['ticker']] = price
+            value = holding['shares'] * price
+            total_value += value
+            asset_type = 'bonds' if holding['ticker'] == BOND_ETF else 'stocks'
+            asset_values[asset_type] += value
         except Exception as e:
             logging.error(f"Could not get price for {holding['ticker']}: {e}")
+            # Exclude from rebalancing if price is not available
+            continue
 
     if total_value == 0:
-        logging.info(f"Portfolio {portfolio_name} is empty. Nothing to rebalance.")
-        return
+        return []
 
-    current_allocation = {
-        'stocks': stock_value / total_value,
-        'bonds': bond_value / total_value
-    }
+    # Determine trades
+    trades = []
+    for asset_type, target_pct in target_allocation.items():
+        current_value = asset_values[asset_type]
+        target_value = total_value * target_pct
+        diff = target_value - current_value
 
-    logging.info(f"Current allocation for {portfolio_name}: {current_allocation}")
-    logging.info(f"Target allocation for {portfolio_name}: {target_allocation}")
+        if diff > 0: # Need to buy
+            # For simplicity, we buy a broad market ETF for the asset class
+            # A more advanced implementation would select specific assets
+            ticker_to_buy = 'VOO' if asset_type == 'stocks' else BOND_ETF
+            price = yf_download_cached(ticker_to_buy, period="1d")['Close'].iloc[-1]
+            shares = diff / price
+            trades.append({'action': 'BUY', 'ticker': ticker_to_buy, 'shares': round(shares, 6), 'amount': round(diff, 2)})
 
-    # Calculate the difference between the target and current allocations
-    stock_diff = target_allocation['stocks'] - current_allocation['stocks']
-    bond_diff = target_allocation['bonds'] - current_allocation['bonds']
+        elif diff < 0: # Need to sell
+            amount_to_sell = abs(diff)
+            # Sell proportionally from existing holdings of that asset type
+            for holding in holdings:
+                h_asset_type = 'bonds' if holding['ticker'] == BOND_ETF else 'stocks'
+                if h_asset_type == asset_type:
+                    price = current_prices.get(holding['ticker'])
+                    if price:
+                        value_of_holding = holding['shares'] * price
+                        proportion = value_of_holding / asset_values[asset_type]
+                        sell_amount_for_holding = amount_to_sell * proportion
+                        shares_to_sell = sell_amount_for_holding / price
+                        trades.append({'action': 'SELL', 'ticker': holding['ticker'], 'shares': round(shares_to_sell, 6), 'amount': round(sell_amount_for_holding, 2)})
 
-    # Generate trades to rebalance the portfolio
-    if stock_diff > 0.05:  # Need to buy more stocks
-        amount_to_buy = total_value * stock_diff
-        # For simplicity, we'll sell bonds to fund the purchase of stocks
-        # In a real application, you would need to select which stocks to buy
-        logging.info(f"Selling {amount_to_buy} of {BOND_ETF} to buy stocks.")
-    elif stock_diff < -0.05:  # Need to sell stocks
-        amount_to_sell = total_value * abs(stock_diff)
-        # For simplicity, we'll sell a portion of each stock holding
-        for holding in holdings:
-            if holding['ticker'] != BOND_ETF:
-                # In a real application, you would need to be more strategic about which stocks to sell
-                logging.info(f"Selling a portion of {holding['ticker']} to buy bonds.")
-
-    logging.info(f"Rebalancing for portfolio {portfolio_name} complete.")
+    return trades

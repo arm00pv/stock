@@ -342,5 +342,21 @@ def api_update_risk_profile(portfolio_name):
 @app.route('/api/rebalance-portfolio/<portfolio_name>', methods=['POST'])
 @login_required
 def api_rebalance_portfolio(portfolio_name):
-    rebalance_portfolio(portfolio_name)
-    return jsonify({'status': 'success', 'message': 'Portfolio rebalancing initiated.'})
+    plan = rebalance_portfolio(portfolio_name)
+    return jsonify(plan)
+
+@app.route('/api/execute-rebalance/<portfolio_name>', methods=['POST'])
+@login_required
+def api_execute_rebalance(portfolio_name):
+    data = request.get_json()
+    plan = data.get('plan')
+    if not plan:
+        return jsonify({'error': 'Invalid rebalancing plan'}), 400
+
+    for trade in plan:
+        if trade['action'] == 'SELL':
+            execute_sale(portfolio_name, trade['ticker'], trade['shares'], trade['amount'] / trade['shares'])
+        elif trade['action'] == 'BUY':
+            execute_investment(portfolio_name, trade['ticker'], trade['shares'], trade['amount'] / trade['shares'], trade['amount'])
+
+    return jsonify({'status': 'success', 'message': 'Rebalancing trades executed successfully.'})
