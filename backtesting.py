@@ -4,7 +4,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 import logging
 import requests
-from cache import yf_download_cached
 
 logging.basicConfig(level=logging.INFO,
                     filename='backtesting.log',
@@ -90,6 +89,8 @@ def get_historical_recommendation(current_date, hist_data, tickers, sentiment_sc
 
     if not scored_tickers: return tickers[0] if tickers else None
     return sorted(scored_tickers, key=lambda x: x[1], reverse=True)[0][0]
+
+from cache import yf_download_cached
 
 def run_backtest(start_date_str, end_date_str, initial_capital, investment_amount, category, tickers, short_ma, long_ma):
     logging.info(f"Starting backtest for {category} from {start_date_str} to {end_date_str}")

@@ -1,5 +1,4 @@
 import yfinance as yf
-from cache import yf_download_cached
 
 def screen_stocks(criteria):
     # This is a placeholder for a more sophisticated stock screener.

@@ -11,17 +11,16 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Length, EqualTo, ValidationError
 from database import (
-    init_db, get_all_portfolios_data,
+    init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
-    execute_investment, get_ai_settings, save_ai_settings, execute_sale, get_db_connection
+    execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
 from decimal import Decimal
-from ai_trader import manage_ai_portfolio
-from cache import yf_download_cached
 from models import User
 from screener import screen_stocks
+from ai_trader import manage_ai_portfolio
 
 load_dotenv()
 
@@ -40,7 +39,13 @@ def load_user(user_id):
 # Initialize the database
 init_db()
 
-from constants import TICKER_CATEGORIES
+# Using hardcoded lists for stability during the reset
+TICKER_CATEGORIES = {
+    'hot_stock': ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA', 'TSLA', 'META', 'JPM', 'JNJ', 'V'],
+    'penny_stock': ['SNDL', 'CTRM', 'ZOM', 'AMC', 'BB', 'EXPR', 'GSAT', 'NAKD', 'TXMD', 'GNUS'],
+    'monthly_dividend': ['O', 'MAIN', 'STAG', 'GAIN', 'GOOD', 'PBA', 'SBR', 'ADC', 'EPR', 'LTC'],
+    'high_yield': ['AGNC', 'ORC', 'PSEC', 'ARR', 'MFA', 'IVR', 'TWO', 'EARN', 'OXLC', 'HRZN']
+}
 
 class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
@@ -143,61 +148,56 @@ def api_daily_pick(category_key):
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
     try:
-        summaries, all_holdings = get_all_portfolios_data()
-        all_tickers = {holding['ticker'] for holdings in all_holdings.values() for holding in holdings}
+        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+        all_holdings = {}
+        all_tickers = set()
+
+        for name in portfolio_names:
+            holdings = get_portfolio_holdings(name)
+            all_holdings[name] = holdings
+            for holding in holdings:
+                all_tickers.add(holding['ticker'])
 
         price_data = {}
         if all_tickers:
-            data = yf_download_cached(list(all_tickers), period='1d', progress=False, raise_errors=False)
-            if not data.empty and 'Close' in data:
-                close_prices = data['Close']
-                if isinstance(close_prices, pd.Series):
-                    # Single ticker case
-                    if not close_prices.empty and not pd.isna(close_prices.iloc[-1]):
-                        price_data[list(all_tickers)[0]] = close_prices.iloc[-1]
-                else:
-                    # Multiple tickers case
-                    if not close_prices.empty:
-                        last_prices = close_prices.iloc[-1]
-                        price_data = last_prices.dropna().to_dict()
+            data = yf.download(list(all_tickers), period='1d', progress=False)
+            if not data.empty and 'Close' in data and not data['Close'].empty:
+                price_data = data['Close'].iloc[-1].to_dict() if len(all_tickers) > 1 else {list(all_tickers)[0]: data['Close'].iloc[-1]}
 
         response_data = {}
-        for name, summary in summaries.items():
-            holdings = all_holdings.get(name, [])
+        for name in portfolio_names:
+            summary = get_portfolio_summary(name)
+            holdings = all_holdings[name]
             total_market_value = 0.0
 
             for holding in holdings:
-                current_price = price_data.get(holding['ticker'])
-                if not current_price or pd.isna(current_price):
-                    current_price = float(holding['purchase_price'])
-
+                current_price = price_data.get(holding['ticker'], float(holding['purchase_price']))
                 holding.update({
                     'shares': float(holding['shares']),
                     'purchase_price': float(holding['purchase_price']),
-                    'current_price': current_price,
+                    'current_price': float(current_price),
                     'cost_basis': float(holding['shares']) * float(holding['purchase_price']),
-                    'current_value': float(holding['shares']) * current_price,
-                    'gain_loss': (float(holding['shares']) * current_price) - (float(holding['shares']) * float(holding['purchase_price']))
+                    'current_value': float(holding['shares']) * float(current_price),
+                    'gain_loss': (float(holding['shares']) * float(current_price)) - (float(holding['shares']) * float(holding['purchase_price']))
                 })
                 total_market_value += holding['current_value']
 
-            total_capital_invested = float(summary['total_invested'])
-            cash_balance = float(summary['cash_balance'])
+            total_capital_invested = float(summary[1])
             roi_percentage = ((total_market_value - total_capital_invested) / total_capital_invested) * 100 if total_capital_invested > 0 else 0
 
             response_data[name] = {
                 'portfolio_name': name,
-                'cash_balance': cash_balance,
+                'cash_balance': float(summary[0]),
                 'total_invested': total_capital_invested,
                 'current_market_value': total_market_value,
-                'total_assets': cash_balance + total_market_value,
+                'total_assets': float(summary[0]) + total_market_value,
                 'total_gain_loss': total_market_value - total_capital_invested,
                 'roi_percentage': roi_percentage,
                 'holdings': holdings
             }
         return jsonify(response_data)
     except Exception as e:
-        return jsonify({'error': f'Failed to load portfolio data: {e}'}), 500
+        return jsonify({'error': 'Failed to load portfolio data due to a server error.'}), 500
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
@@ -215,11 +215,8 @@ def trigger_investment(portfolio_name):
         return jsonify({'status': 'error', 'message': 'No suitable stock found.'})
 
     try:
-        price_history = yf_download_cached(ticker, period="1d")
-        if price_history.empty or 'Close' not in price_history or price_history['Close'].iloc[-1] <= 0:
-            raise ValueError("Invalid or zero price from yfinance")
-
-        price = price_history['Close'].iloc[-1]
+        price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+        if not price or price <= 0: raise ValueError("Invalid price")
         shares = investment_amount / price
         execute_investment(portfolio_name, ticker, shares, price, investment_amount)
         return jsonify({'status': 'success', 'message': f'Successfully invested in {ticker}.'})
@@ -234,8 +231,6 @@ def api_backtest():
     initial_capital = float(data.get('initial_capital', 10000))
     investment_amount = float(data.get('investment_amount', 100))
     category = data.get('category')
-    short_ma = int(data.get('short_ma', 50))
-    long_ma = int(data.get('long_ma', 200))
 
     if not all([start_date, end_date, category]):
         return jsonify({'error': 'Missing required parameters'}), 400
@@ -244,7 +239,7 @@ def api_backtest():
     if not tickers:
         return jsonify({'error': 'Invalid category'}), 400
 
-    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers, short_ma, long_ma)
+    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers)
     return jsonify(results)
 
 @app.route('/api/settings/<category>', methods=['GET'])
@@ -258,6 +253,7 @@ def api_get_settings(category):
     return jsonify(settings)
 
 @app.route('/api/sell-stock', methods=['POST'])
+@login_required
 def api_sell_stock():
     data = request.get_json()
     portfolio_name = data.get('portfolio_name')
@@ -268,11 +264,8 @@ def api_sell_stock():
         return jsonify({'status': 'error', 'message': 'Missing required parameters.'}), 400
 
     try:
-        price_history = yf_download_cached(ticker, period="1d")
-        if price_history.empty or 'Close' not in price_history or price_history['Close'].iloc[-1] <= 0:
-            raise ValueError("Invalid or zero price from yfinance")
-
-        price = price_history['Close'].iloc[-1]
+        price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+        if not price or price <= 0: raise ValueError("Invalid price")
 
         success, message = execute_sale(portfolio_name, ticker, float(shares_to_sell), price)
         if success:
@@ -283,19 +276,18 @@ def api_sell_stock():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'Failed to sell {ticker}: {e}'}), 500
 
-@app.route('/api/run-ai-trader', methods=['POST'])
-def api_run_ai_trader():
-    try:
-        manage_ai_portfolio()
-        return jsonify({'status': 'success', 'message': 'AI portfolio management cycle complete.'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
-
 @app.route('/api/screener', methods=['POST'])
+@login_required
 def api_screener():
     criteria = request.get_json()
     results = screen_stocks(criteria)
     return jsonify(results)
+
+@app.route('/api/run-ai-trader', methods=['POST'])
+@login_required
+def run_ai_trader():
+    manage_ai_portfolio()
+    return jsonify({"status": "success"})
 
 @app.route('/api/settings/<category>', methods=['POST'])
 def api_save_settings(category):

@@ -2,8 +2,6 @@ flask
 mysql-connector-python
 yfinance
 python-dotenv
-pandas
-requests
 Flask-Login
 Flask-Bcrypt
 Flask-WTF
