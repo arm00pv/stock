@@ -186,6 +186,23 @@ def get_portfolio_holdings(portfolio_name):
     conn.close()
     return holdings
 
+def get_portfolio_names():
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT portfolio_name FROM portfolio_summary ORDER BY portfolio_name")
+            portfolios = [item[0] for item in cursor.fetchall()]
+            return portfolios
+    except mysql.connector.Error as err:
+        # Using a generic error log function for demonstration
+        print(f"Error fetching portfolio names: {err}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
 def execute_sale(portfolio_name, ticker, shares_to_sell, price):
     conn = get_db_connection()
     if not conn:

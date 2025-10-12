@@ -9,15 +9,12 @@
 </head>
 <body>
     <div class="container">
-        <div class="tabs">
+        <div class="tabs" id="portfolio-tabs-container">
             <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
             <button class="tab-link" onclick="openTab(event, 'PennyStocks')">$5 or Less</button>
             <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')">Monthly Dividend</button>
             <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Hot Stock Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Dividend Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Best Pick Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
+            <!-- Portfolio tabs will be inserted here -->
             <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
             <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
             <button class="tab-link" onclick="openTab(event, 'Screener')">Stock Screener</button>
@@ -50,31 +47,7 @@
             <div id="historical-picks-high_yield" class="historical-picks-container"><ul></ul></div>
         </div>
 
-        <!-- Portfolio Tabs -->
-        <div id="PortfolioMain" class="tab-content">
-            <h1>$5 Hot Stock Portfolio</h1>
-            <div id="portfolio-summary-main" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-main"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioMonthly" class="tab-content">
-            <h1>$5 Monthly Dividend Portfolio</h1>
-            <div id="portfolio-summary-monthly_dividend" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioDaily" class="tab-content">
-            <h1>$5 Daily Best Pick Portfolio</h1>
-            <div id="portfolio-summary-daily_investment" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioHighYield" class="tab-content">
-            <h1>$5 High Yield Portfolio</h1>
-            <div id="portfolio-summary-high_yield_investment" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
-        </div>
+        <!-- Portfolio Content Panes will be inserted here -->
 
         <!-- Backtesting Tab -->
         <div id="Backtesting" class="tab-content">
@@ -263,16 +236,53 @@
             });
         }
 
-        function populateAllPortfolios() {
-            const portfolioNames = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment'];
-            portfolioNames.forEach(name => {
-                document.getElementById(`portfolio-summary-${name}`).innerHTML = SPINNER_HTML;
-                document.getElementById(`portfolio-holdings-${name}`).querySelector('tbody').innerHTML = '';
-            });
+        function formatPortfolioName(name) {
+            return name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
 
+        function populatePortfolioTabs() {
+            const tabsContainer = document.getElementById('portfolio-tabs-container');
+            const backtestingButton = tabsContainer.querySelector('button[onclick*="Backtesting"]');
+
+            fetch(`${API_BASE_URL}/api/portfolio-names`)
+                .then(response => response.json())
+                .then(portfolioNames => {
+                    portfolioNames.forEach(name => {
+                        // Create and insert the tab button
+                        const button = document.createElement('button');
+                        button.className = 'tab-link';
+                        button.textContent = formatPortfolioName(name);
+                        button.onclick = (event) => openTab(event, `Portfolio_${name}`);
+                        tabsContainer.insertBefore(button, backtestingButton);
+
+                        // Create and insert the content pane
+                        const contentDiv = document.createElement('div');
+                        contentDiv.id = `Portfolio_${name}`;
+                        contentDiv.className = 'tab-content';
+                        contentDiv.innerHTML = `
+                            <h1>${formatPortfolioName(name)} Portfolio</h1>
+                            <div id="portfolio-summary-${name}" class="portfolio-summary"></div>
+                            <h2>Holdings</h2>
+                            <table id="portfolio-holdings-${name}"><thead></thead><tbody></tbody></table>
+                        `;
+                        // Insert the content pane before the Backtesting content pane
+                        document.getElementById('Backtesting').parentNode.insertBefore(contentDiv, document.getElementById('Backtesting'));
+                    });
+                })
+                .catch(err => console.error('Error fetching portfolio names:', err));
+        }
+
+        function populateAllPortfolios() {
             fetch(`${API_BASE_URL}/api/all-portfolios`)
                 .then(response => response.json())
                 .then(allData => {
+                    // Clear existing spinners before rendering
+                    const portfolioNames = Object.keys(allData);
+                    portfolioNames.forEach(name => {
+                        const summaryDiv = document.getElementById(`portfolio-summary-${name}`);
+                        if (summaryDiv) summaryDiv.innerHTML = SPINNER_HTML;
+                    });
+
                     for (const portfolioName in allData) {
                         if (allData.hasOwnProperty(portfolioName)) {
                             renderPortfolioData(portfolioName, allData[portfolioName]);
@@ -280,9 +290,9 @@
                     }
                 }).catch(err => {
                     console.error('Error fetching all portfolios:', err);
-                    portfolioNames.forEach(name => {
-                        document.getElementById(`portfolio-summary-${name}`).innerHTML = `<p>Could not load portfolio data.</p>`;
-                    });
+                    // You might want a more robust way to handle errors for dynamic tabs
+                    const portfolioContainer = document.getElementById('portfolio-tabs-container').parentNode;
+                    portfolioContainer.innerHTML = `<p>Could not load portfolio data.</p>`;
                 });
         }
 
@@ -560,6 +570,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            populatePortfolioTabs(); // Dynamically create portfolio tabs
             CATEGORIES.forEach(populatePicks);
             populateAllPortfolios();
             populateAIPerformance();

@@ -14,7 +14,7 @@ from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
-    get_ai_performance_data
+    get_ai_performance_data, get_portfolio_names
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
@@ -146,10 +146,19 @@ def api_daily_pick(category_key):
     latest_pick_to_display = history[0]['ticker'] if history else "N/A"
     return jsonify({'ticker': latest_pick_to_display, 'history': history})
 
+@app.route('/api/portfolio-names')
+def api_portfolio_names():
+    try:
+        portfolio_names = get_portfolio_names()
+        return jsonify(portfolio_names)
+    except Exception as e:
+        # Log the exception e
+        return jsonify({'error': 'Could not retrieve portfolio names.'}), 500
+
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
     try:
-        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+        portfolio_names = get_portfolio_names()
         all_holdings = {}
         all_tickers = set()
 
