@@ -77,6 +77,15 @@ def init_db():
         )
     """)
 
+    # Add risk_profile column to portfolio_summary if it doesn't exist
+    try:
+        cursor.execute("ALTER TABLE portfolio_summary ADD COLUMN risk_profile VARCHAR(20) NOT NULL DEFAULT 'Moderate'")
+    except mysql.connector.Error as err:
+        if err.errno == 1060: # Duplicate column name
+            pass
+        else:
+            raise
+
     # Initialize portfolios
     portfolios_to_init = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
     for p_name in portfolios_to_init:
@@ -199,6 +208,39 @@ def get_portfolio_names():
         # Using a generic error log function for demonstration
         print(f"Error fetching portfolio names: {err}")
         return []
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+def get_risk_profile(portfolio_name):
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT risk_profile FROM portfolio_summary WHERE portfolio_name = %s", (portfolio_name,))
+            result = cursor.fetchone()
+            return result['risk_profile'] if result else None
+    except mysql.connector.Error as err:
+        print(f"Error getting risk profile: {err}")
+        return None
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+def update_risk_profile(portfolio_name, risk_profile):
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE portfolio_summary SET risk_profile = %s WHERE portfolio_name = %s", (risk_profile, portfolio_name))
+            conn.commit()
+            return True
+    except mysql.connector.Error as err:
+        print(f"Error updating risk profile: {err}")
+        conn.rollback()
+        return False
     finally:
         if conn and conn.is_connected():
             conn.close()

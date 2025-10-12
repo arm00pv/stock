@@ -1,5 +1,5 @@
 import logging
-from database import get_portfolio_holdings, execute_sale, execute_investment, log_ai_decision
+from database import get_portfolio_holdings, execute_sale, execute_investment, log_ai_decision, get_risk_profile
 from ai_picker import get_ai_recommendation, get_ai_recommendation_score
 from constants import TICKER_CATEGORIES
 from cache import yf_download_cached
@@ -55,10 +55,19 @@ def manage_ai_portfolio():
 
     portfolio_name = 'ai_guided_portfolio'
     holdings = get_portfolio_holdings(portfolio_name)
+    risk_profile = get_risk_profile(portfolio_name)
+
+    # Set base sell threshold based on risk profile
+    if risk_profile == 'Conservative':
+        base_sell_threshold = 0.6
+    elif risk_profile == 'Aggressive':
+        base_sell_threshold = 0.3
+    else:  # Moderate
+        base_sell_threshold = 0.4
 
     market_sentiment = get_market_sentiment()
     # Adjust sell threshold based on market sentiment
-    sell_threshold = 0.4 - (market_sentiment * 0.1) # More aggressive selling in a bear market
+    sell_threshold = base_sell_threshold - (market_sentiment * 0.1) # More aggressive selling in a bear market
 
     total_proceeds = 0
     if not holdings:

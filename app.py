@@ -14,7 +14,7 @@ from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
-    get_ai_performance_data, get_portfolio_names
+    get_ai_performance_data, get_portfolio_names, get_risk_profile, update_risk_profile
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
@@ -22,6 +22,7 @@ from decimal import Decimal
 from models import User
 from screener import screen_stocks
 from ai_trader import manage_ai_portfolio
+from rebalancing import rebalance_portfolio
 
 load_dotenv()
 
@@ -317,3 +318,29 @@ def api_save_settings(category):
 
     save_ai_settings(category, data)
     return jsonify({'status': 'success', 'message': 'Settings saved successfully.'})
+
+@app.route('/api/risk-profile/<portfolio_name>', methods=['GET'])
+@login_required
+def api_get_risk_profile(portfolio_name):
+    risk_profile = get_risk_profile(portfolio_name)
+    if risk_profile:
+        return jsonify({'risk_profile': risk_profile})
+    return jsonify({'error': 'Portfolio not found or error fetching profile'}), 404
+
+@app.route('/api/risk-profile/<portfolio_name>', methods=['POST'])
+@login_required
+def api_update_risk_profile(portfolio_name):
+    data = request.get_json()
+    risk_profile = data.get('risk_profile')
+    if not risk_profile or risk_profile not in ['Conservative', 'Moderate', 'Aggressive']:
+        return jsonify({'error': 'Invalid risk profile'}), 400
+
+    if update_risk_profile(portfolio_name, risk_profile):
+        return jsonify({'status': 'success', 'message': 'Risk profile updated successfully.'})
+    return jsonify({'error': 'Failed to update risk profile'}), 500
+
+@app.route('/api/rebalance-portfolio/<portfolio_name>', methods=['POST'])
+@login_required
+def api_rebalance_portfolio(portfolio_name):
+    rebalance_portfolio(portfolio_name)
+    return jsonify({'status': 'success', 'message': 'Portfolio rebalancing initiated.'})

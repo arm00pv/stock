@@ -261,6 +261,7 @@
                         contentDiv.className = 'tab-content';
                         contentDiv.innerHTML = `
                             <h1>${formatPortfolioName(name)} Portfolio</h1>
+                            <button onclick="rebalancePortfolio('${name}')">Rebalance</button>
                             <div id="portfolio-summary-${name}" class="portfolio-summary"></div>
                             <h2>Holdings</h2>
                             <table id="portfolio-holdings-${name}"><thead></thead><tbody></tbody></table>
@@ -385,12 +386,96 @@
         }
 
         function renderSettings() {
+            console.log("Rendering settings...");
             const container = document.getElementById('settings-container');
-            container.innerHTML = '';
+            container.innerHTML = '<h2>Risk Profiles</h2><div id="risk-profile-settings"></div><hr><h2>AI Strategy Weights</h2>';
+            const riskProfileContainer = document.getElementById('risk-profile-settings');
+
+            fetch(`${API_BASE_URL}/api/portfolio-names`)
+                .then(response => response.json())
+                .then(portfolioNames => {
+                    portfolioNames.forEach(name => {
+                        console.log("Creating dropdown for:", name);
+                        const div = document.createElement('div');
+                        div.className = 'setting-item';
+                        div.innerHTML = `<label for="risk-${name}">${formatPortfolioName(name)}:</label>
+                                       <select id="risk-${name}" onchange="saveRiskProfile('${name}')">
+                                           <option value="Conservative">Conservative</option>
+                                           <option value="Moderate">Moderate</option>
+                                           <option value="Aggressive">Aggressive</option>
+                                       </select>`;
+                        riskProfileContainer.appendChild(div);
+
+                        fetch(`${API_BASE_URL}/api/risk-profile/${name}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if(data.risk_profile) {
+                                    document.getElementById(`risk-${name}`).value = data.risk_profile;
+                                }
+                            });
+                    });
+                });
+
             CATEGORIES.forEach(category => {
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'settings-category';
-                categoryDiv.innerHTML = `<h2>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h2>`;
+                categoryDiv.innerHTML = `<h3>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>`;
+
+                const form = document.createElement('form');
+                form.id = `settings-form-${category}`;
+
+                WEIGHT_KEYS.forEach(key => {
+                    const label = document.createElement('label');
+                    label.htmlFor = `slider-${category}-${key}`;
+                    label.textContent = `${key.replace(/_/g, ' ')}: `;
+
+                    const slider = document.createElement('input');
+                    slider.type = 'range';
+                    slider.id = `slider-${category}-${key}`;
+                    slider.name = key;
+                    slider.min = 0;
+                    slider.max = 1;
+                    slider.step = 0.05;
+
+                    const valueSpan = document.createElement('span');
+                    valueSpan.id = `value-${category}-${key}`;
+
+                    slider.oninput = () => { valueSpan.textContent = slider.value; };
+
+                    form.appendChild(label);
+                    form.appendChild(slider);
+                    form.appendChild(valueSpan);
+                    form.appendChild(document.createElement('br'));
+                });
+
+                const saveButton = document.createElement('button');
+                saveButton.textContent = 'Save Settings';
+                saveButton.onclick = (e) => {
+                    e.preventDefault();
+                    saveSettings(category);
+                };
+                form.appendChild(saveButton);
+
+                categoryDiv.appendChild(form);
+                container.appendChild(categoryDiv);
+
+                fetch(`${API_BASE_URL}/api/settings/${category}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        WEIGHT_KEYS.forEach(key => {
+                            const slider = document.getElementById(`slider-${category}-${key}`);
+                            const valueSpan = document.getElementById(`value-${category}-${key}`);
+                            slider.value = data[key];
+                            valueSpan.textContent = data[key];
+                        });
+                    });
+            });
+        }
+
+        function runScreener() {
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'settings-category';
+                categoryDiv.innerHTML = `<h3>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>`;
 
                 const form = document.createElement('form');
                 form.id = `settings-form-${category}`;
@@ -567,6 +652,41 @@
                       alert('Error saving settings: ' + data.error);
                   }
               });
+        }
+
+        function saveRiskProfile(portfolioName) {
+            const select = document.getElementById(`risk-${portfolioName}`);
+            const riskProfile = select.value;
+
+            fetch(`${API_BASE_URL}/api/risk-profile/${portfolioName}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ risk_profile: riskProfile })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    alert('Risk profile updated successfully!');
+                } else {
+                    alert('Error updating risk profile: ' + data.error);
+                }
+            });
+        }
+
+        function rebalancePortfolio(portfolioName) {
+            fetch(`${API_BASE_URL}/api/rebalance-portfolio/${portfolioName}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    alert('Portfolio rebalancing initiated!');
+                    populateAllPortfolios();
+                } else {
+                    alert('Error initiating rebalancing: ' + data.error);
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
