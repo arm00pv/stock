@@ -227,7 +227,7 @@ function App() {
     return (
         <div className="App">
             <header className="App-header">
-                <h1>Crypto-Gated Portfolio Analyzer</h1>
+                <h1>Portfolio Analyzer</h1>
                 {!walletAddress ? (
                     <button onClick={connectWallet} className="connect-wallet-btn">Connect Wallet</button>
                 ) : (
