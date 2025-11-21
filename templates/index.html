@@ -313,7 +313,10 @@
                         <div class="card shadow-sm h-100">
                             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0 text-capitalize">${key.replace(/_/g, ' ')}</h5>
-                                <button class="btn btn-sm btn-success" onclick="triggerInvestment('${key}')"><i class="fas fa-plus"></i> Invest</button>
+                                <div>
+                                    <button class="btn btn-sm btn-outline-info me-1" onclick="auditPortfolio('${key}')"><i class="fas fa-clipboard-check"></i> Audit</button>
+                                    <button class="btn btn-sm btn-success" onclick="triggerInvestment('${key}')"><i class="fas fa-plus"></i> Invest</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="row mb-3 text-center">
@@ -328,6 +331,34 @@
                                 </div>
                             </div>
                         </div>
+
+<!-- Portfolio Audit Modal -->
+<div class="modal fade" id="auditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Portfolio Audit Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="audit-results-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Recommendation</th>
+                        <th>Reason</th>
+                        <th>AI Score</th>
+                        <th>Sell Score</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
                     `;
                     container.appendChild(col);
                 }
@@ -345,6 +376,38 @@
             .then(data => {
                 alert(data.message);
                 if(data.status === 'success') populateAllPortfolios();
+            });
+    }
+
+    function auditPortfolio(portfolioName) {
+        const modal = new bootstrap.Modal(document.getElementById('auditModal'));
+        const tbody = document.getElementById('audit-results-table').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center"><div class="spinner-border text-primary"></div> Auditing...</td></tr>';
+        modal.show();
+
+        fetch(`${API_BASE_URL}/api/audit-portfolio/${portfolioName}`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${createTickerLink(item.ticker)}</td>
+                                <td><span class="badge bg-${item.action_color}">${item.recommendation}</span></td>
+                                <td>${item.reason}</td>
+                                <td>${item.current_score.toFixed(2)}</td>
+                                <td>${item.dynamic_score.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No holdings to audit.</td></tr>';
+                }
+            })
+            .catch(err => {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Audit failed.</td></tr>';
+                console.error(err);
             });
     }
 

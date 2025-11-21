@@ -92,6 +92,60 @@ def manage_ai_portfolio():
     investment_amount = total_proceeds if total_proceeds > 0 else 100.00
     invest_in_new_stock(portfolio_name, investment_amount)
 
+def audit_portfolio(portfolio_name):
+    """
+    Audits a portfolio and returns recommendations for each holding.
+    """
+    holdings = get_portfolio_holdings(portfolio_name)
+    audit_report = []
+
+    market_sentiment = get_market_sentiment()
+    sell_threshold = 0.4 - (market_sentiment * 0.1)
+
+    for holding in holdings:
+        ticker = holding['ticker']
+        try:
+            current_ai_score = get_ai_recommendation_score('hot_stock', ticker)
+            sell_score = calculate_sell_score(ticker, current_ai_score)
+
+            recommendation = "HOLD"
+            reason = "Score is stable."
+            action_color = "secondary"
+
+            if sell_score < sell_threshold:
+                recommendation = "SELL"
+                reason = f"Score ({sell_score:.2f}) below threshold ({sell_threshold:.2f})."
+                action_color = "danger"
+            elif sell_score > 0.8:
+                recommendation = "STRONG HOLD"
+                reason = f"Excellent score ({sell_score:.2f})."
+                action_color = "success"
+            elif sell_score > sell_threshold:
+                 recommendation = "HOLD"
+                 reason = f"Score ({sell_score:.2f}) is above threshold."
+                 action_color = "warning"
+
+            audit_report.append({
+                "ticker": ticker,
+                "shares": float(holding['shares']),
+                "purchase_price": float(holding['purchase_price']),
+                "current_score": float(current_ai_score),
+                "dynamic_score": float(sell_score),
+                "recommendation": recommendation,
+                "reason": reason,
+                "action_color": action_color
+            })
+        except Exception as e:
+            logging.error(f"Error auditing {ticker}: {e}")
+            audit_report.append({
+                "ticker": ticker,
+                "recommendation": "ERROR",
+                "reason": str(e),
+                "action_color": "dark"
+            })
+
+    return audit_report
+
 def invest_in_new_stock(portfolio_name, investment_amount):
     """
     Invests a given amount in a new top-rated stock.

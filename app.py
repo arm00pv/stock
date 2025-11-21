@@ -21,7 +21,7 @@ from backtesting import run_backtest
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
-from ai_trader import manage_ai_portfolio
+from ai_trader import manage_ai_portfolio, audit_portfolio
 
 load_dotenv()
 
@@ -343,6 +343,12 @@ def api_ai_analysis(ticker):
     if not analysis:
         return jsonify({'error': 'Could not generate analysis'}), 404
     return jsonify(analysis)
+
+@app.route('/api/audit-portfolio/<portfolio_name>')
+@login_required
+def api_audit_portfolio(portfolio_name):
+    report = audit_portfolio(portfolio_name)
+    return jsonify(report)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
