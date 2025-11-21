@@ -45,7 +45,8 @@ TICKER_CATEGORIES = {
     'hot_stock': ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA', 'TSLA', 'META', 'JPM', 'JNJ', 'V'],
     'penny_stock': ['SNDL', 'CTRM', 'ZOM', 'AMC', 'BB', 'EXPR', 'GSAT', 'NAKD', 'TXMD', 'GNUS'],
     'monthly_dividend': ['O', 'MAIN', 'STAG', 'GAIN', 'GOOD', 'PBA', 'SBR', 'ADC', 'EPR', 'LTC'],
-    'high_yield': ['AGNC', 'ORC', 'PSEC', 'ARR', 'MFA', 'IVR', 'TWO', 'EARN', 'OXLC', 'HRZN']
+    'high_yield': ['AGNC', 'ORC', 'PSEC', 'ARR', 'MFA', 'IVR', 'TWO', 'EARN', 'OXLC', 'HRZN'],
+    'crypto': ['BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD', 'ADA-USD', 'XRP-USD', 'DOT-USD', 'LTC-USD', 'LINK-USD', 'BCH-USD']
 }
 
 class RegistrationForm(FlaskForm):
@@ -149,7 +150,7 @@ def api_daily_pick(category_key):
 @app.route('/api/all-portfolios')
 def all_portfolios_data():
     try:
-        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment']
+        portfolio_names = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment', 'crypto_portfolio']
         all_holdings = {}
         all_tickers = set()
 
@@ -163,7 +164,13 @@ def all_portfolios_data():
         if all_tickers:
             data = yf.download(list(all_tickers), period='1d', progress=False)
             if not data.empty and 'Close' in data and not data['Close'].empty:
-                price_data = data['Close'].iloc[-1].to_dict() if len(all_tickers) > 1 else {list(all_tickers)[0]: data['Close'].iloc[-1]}
+                # Handle both Series (single ticker) and DataFrame (multiple tickers)
+                close_data = data['Close']
+                if len(all_tickers) > 1:
+                    price_data = close_data.iloc[-1].to_dict()
+                else:
+                    ticker = list(all_tickers)[0]
+                    price_data = {ticker: close_data.iloc[-1]}
 
         response_data = {}
         for name in portfolio_names:
@@ -203,7 +210,13 @@ def all_portfolios_data():
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
 def trigger_investment(portfolio_name):
     investment_amount = 5.00
-    category_map = {'main': 'hot_stock', 'monthly_dividend': 'monthly_dividend', 'high_yield_investment': 'high_yield', 'daily_investment': 'hot_stock'}
+    category_map = {
+        'main': 'hot_stock',
+        'monthly_dividend': 'monthly_dividend',
+        'high_yield_investment': 'high_yield',
+        'daily_investment': 'hot_stock',
+        'crypto_portfolio': 'crypto'
+    }
     category = category_map.get(portfolio_name)
 
     if not category:
@@ -308,3 +321,6 @@ def api_save_settings(category):
 
     save_ai_settings(category, data)
     return jsonify({'status': 'success', 'message': 'Settings saved successfully.'})
+
+if __name__ == '__main__':
+    app.run(debug=False, port=5000)

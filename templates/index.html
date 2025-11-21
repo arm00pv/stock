@@ -1,570 +1,508 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Picks</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="container">
-        <div class="tabs">
-            <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
-            <button class="tab-link" onclick="openTab(event, 'PennyStocks')">$5 or Less</button>
-            <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')">Monthly Dividend</button>
-            <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Hot Stock Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Dividend Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Best Pick Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'Backtesting')">Backtesting</button>
-            <button class="tab-link" onclick="openTab(event, 'Settings')">Settings</button>
-            <button class="tab-link" onclick="openTab(event, 'Screener')">Stock Screener</button>
-            <button class="tab-link" onclick="openTab(event, 'AIPerformance')">AI Performance</button>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Daily Pick Tabs -->
-        <div id="HotStocks" class="tab-content" style="display:block;">
-            <h1>Hot Stock of the Day</h1>
-            <div id="daily-pick-hot_stock" class="daily-pick-container"></div>
-            <h2>Historical Picks</h2>
-            <div id="historical-picks-hot_stock" class="historical-picks-container"><ul></ul></div>
-        </div>
-        <div id="PennyStocks" class="tab-content">
-            <h1>Pick of the Day ($5 or Less)</h1>
-            <div id="daily-pick-penny_stock" class="daily-pick-container"></div>
-            <h2>Historical Picks</h2>
-            <div id="historical-picks-penny_stock" class="historical-picks-container"><ul></ul></div>
-        </div>
-        <div id="MonthlyDividend" class="tab-content">
-            <h1>Monthly Dividend Pick of the Day</h1>
-            <div id="daily-pick-monthly_dividend" class="daily-pick-container"></div>
-            <h2>Historical Picks</h2>
-            <div id="historical-picks-monthly_dividend" class="historical-picks-container"><ul></ul></div>
-        </div>
-        <div id="HighYield" class="tab-content">
-            <h1>High Yield Pick of the Day</h1>
-            <div id="daily-pick-high_yield" class="daily-pick-container"></div>
-            <h2>Historical Picks</h2>
-            <div id="historical-picks-high_yield" class="historical-picks-container"><ul></ul></div>
-        </div>
+{% block title %}Dashboard - Portfolio Analyzer{% endblock %}
 
-        <!-- Portfolio Tabs -->
-        <div id="PortfolioMain" class="tab-content">
-            <h1>$5 Hot Stock Portfolio</h1>
-            <div id="portfolio-summary-main" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-main"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioMonthly" class="tab-content">
-            <h1>$5 Monthly Dividend Portfolio</h1>
-            <div id="portfolio-summary-monthly_dividend" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioDaily" class="tab-content">
-            <h1>$5 Daily Best Pick Portfolio</h1>
-            <div id="portfolio-summary-daily_investment" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
-        </div>
-        <div id="PortfolioHighYield" class="tab-content">
-            <h1>$5 High Yield Portfolio</h1>
-            <div id="portfolio-summary-high_yield_investment" class="portfolio-summary"></div>
-            <h2>Holdings</h2>
-            <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
-        </div>
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="display-4">AI Dashboard</h1>
+        <p class="lead">Your AI-powered investment assistant.</p>
+    </div>
+</div>
 
-        <!-- Backtesting Tab -->
-        <div id="Backtesting" class="tab-content">
-            <h1>Backtest AI Strategy</h1>
-            <div class="backtest-form">
-                <label for="bt-start-date">Start Date:</label>
-                <input type="date" id="bt-start-date" value="2023-01-01">
-                <label for="bt-end-date">End Date:</label>
-                <input type="date" id="bt-end-date" value="2023-12-31">
-                <label for="bt-capital">Initial Capital:</label>
-                <input type="number" id="bt-capital" value="10000">
-                <label for="bt-investment">Daily Investment:</label>
-                <input type="number" id="bt-investment" value="100">
-                <label for="bt-category">Category:</label>
-                <select id="bt-category">
-                    <option value="hot_stock">Hot Stocks</option>
-                    <option value="penny_stock">Penny Stocks</option>
-                    <option value="monthly_dividend">Monthly Dividend</option>
-                    <option value="high_yield">High Yield</option>
-                </select>
-                <label for="bt-short-ma">Short MA:</label>
-                <input type="number" id="bt-short-ma" value="50">
-                <label for="bt-long-ma">Long MA:</label>
-                <input type="number" id="bt-long-ma" value="200">
-                <button onclick="runBacktest()">Run Backtest</button>
+<!-- AI Performance & Overview -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><i class="fas fa-chart-line me-2"></i>AI Performance</h5>
+                <span class="badge bg-light text-primary" id="ai-total-return">Loading...</span>
             </div>
-            <div id="backtest-results-summary" class="portfolio-summary"></div>
-            <div class="chart-container">
-                <canvas id="backtest-chart"></canvas>
-            </div>
-        </div>
-
-        <!-- Settings Tab -->
-        <div id="Settings" class="tab-content">
-            <h1>AI Strategy Settings</h1>
-            <div id="settings-container"></div>
-        </div>
-
-        <!-- Screener Tab -->
-        <div id="Screener" class="tab-content">
-            <h1>Stock Screener</h1>
-            <div class="screener-form">
-                <label for="screener-market-cap-min">Min Market Cap:</label>
-                <input type="number" id="screener-market-cap-min" value="0">
-                <label for="screener-market-cap-max">Max Market Cap:</label>
-                <input type="number" id="screener-market-cap-max" value="1000000000000">
-                <label for="screener-pe-ratio-min">Min P/E Ratio:</label>
-                <input type="number" id="screener-pe-ratio-min" value="0">
-                <label for="screener-pe-ratio-max">Max P/E Ratio:</label>
-                <input type="number" id="screener-pe-ratio-max" value="100">
-                <label for="screener-dividend-yield-min">Min Dividend Yield:</label>
-                <input type="number" id="screener-dividend-yield-min" value="0">
-                <label for="screener-dividend-yield-max">Max Dividend Yield:</label>
-                <input type="number" id="screener-dividend-yield-max" value="10">
-                <label for="screener-sector">Sector:</label>
-                <select id="screener-sector">
-                    <option value="">Any</option>
-                    <option value="Technology">Technology</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Financial Services">Financial Services</option>
-                    <option value="Consumer Cyclical">Consumer Cyclical</option>
-                    <option value="Industrials">Industrials</option>
-                    <option value="Consumer Defensive">Consumer Defensive</option>
-                    <option value="Basic Materials">Basic Materials</option>
-                    <option value="Real Estate">Real Estate</option>
-                    <option value="Energy">Energy</option>
-                    <option value="Utilities">Utilities</option>
-                </select>
-                <button onclick="runScreener()">Run Screener</button>
-            </div>
-            <table id="screener-results"><thead></thead><tbody></tbody></table>
-        </div>
-
-        <!-- AI Performance Tab -->
-        <div id="AIPerformance" class="tab-content">
-            <h1>AI Performance Dashboard</h1>
-            <div id="ai-performance-summary" class="portfolio-summary"></div>
-            <div class="chart-container">
-                <canvas id="ai-performance-chart"></canvas>
+            <div class="card-body">
+                <div id="ai-performance-summary" class="row mb-3 text-center">
+                    <!-- Populated via JS -->
+                </div>
+                <div class="chart-container" style="position: relative; height:300px;">
+                    <canvas id="ai-performance-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0"><i class="fas fa-robot me-2"></i>Daily AI Picks</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush" id="daily-picks-list">
+                    <!-- Populated via JS -->
+                    <div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script>
-        const API_BASE_URL = "{{ url_for('index', _external=False) }}".replace(/\/$/, '');
-        const SPINNER_HTML = '<div class="spinner"></div>';
-        const CATEGORIES = ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield'];
-        const WEIGHT_KEYS = ['momentum_weight', 'value_weight', 'ma_weight', 'volatility_weight', 'volume_weight', 'sentiment_weight'];
+<!-- Main Tabs -->
+<div class="card shadow-sm">
+    <div class="card-header">
+        <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="portfolios-tab" data-bs-toggle="tab" data-bs-target="#portfolios" type="button" role="tab">Portfolios</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="screener-tab" data-bs-toggle="tab" data-bs-target="#screener" type="button" role="tab">Stock Screener</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="backtesting-tab" data-bs-toggle="tab" data-bs-target="#backtesting" type="button" role="tab">Backtesting</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">AI Settings</button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="myTabContent">
 
-        function openTab(evt, tabName) {
-            let i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tab-content");
-            for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
-            tablinks = document.getElementsByClassName("tab-link");
-            for (i = 0; i < tablinks.length; i++) { tablinks[i].className = tablinks[i].className.replace(" active", ""); }
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
-        }
+            <!-- Portfolios Tab -->
+            <div class="tab-pane fade show active" id="portfolios" role="tabpanel">
+                <div class="row" id="portfolios-container">
+                    <!-- Portfolio cards will be injected here -->
+                    <div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div></div>
+                </div>
+            </div>
 
-        function createTickerLink(ticker) {
-            return !ticker || ticker.includes('Error') ? `<span>${ticker}</span>` : `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank">${ticker}</a>`;
-        }
+            <!-- Screener Tab -->
+            <div class="tab-pane fade" id="screener" role="tabpanel">
+                <h3 class="mb-3">Stock Screener</h3>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Min Market Cap</label>
+                        <input type="number" class="form-control" id="screener-market-cap-min" value="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max Market Cap</label>
+                        <input type="number" class="form-control" id="screener-market-cap-max" value="1000000000000">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Min P/E Ratio</label>
+                        <input type="number" class="form-control" id="screener-pe-ratio-min" value="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max P/E Ratio</label>
+                        <input type="number" class="form-control" id="screener-pe-ratio-max" value="100">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Min Div Yield</label>
+                        <input type="number" class="form-control" id="screener-dividend-yield-min" value="0">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max Div Yield</label>
+                        <input type="number" class="form-control" id="screener-dividend-yield-max" value="10">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Sector</label>
+                        <select class="form-select" id="screener-sector">
+                            <option value="">Any</option>
+                            <option value="Technology">Technology</option>
+                            <option value="Healthcare">Healthcare</option>
+                            <option value="Financial Services">Financial Services</option>
+                            <option value="Consumer Cyclical">Consumer Cyclical</option>
+                            <option value="Industrials">Industrials</option>
+                            <option value="Consumer Defensive">Consumer Defensive</option>
+                            <option value="Basic Materials">Basic Materials</option>
+                            <option value="Real Estate">Real Estate</option>
+                            <option value="Energy">Energy</option>
+                            <option value="Utilities">Utilities</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="runScreener()">Run Screener</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="screener-results">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
 
-        function populatePicks(categoryKey) {
-            const dailyPickDiv = document.getElementById(`daily-pick-${categoryKey}`);
-            const historicalPicksUl = document.getElementById(`historical-picks-${categoryKey}`).querySelector('ul');
-            dailyPickDiv.innerHTML = SPINNER_HTML;
-            historicalPicksUl.innerHTML = '';
+            <!-- Backtesting Tab -->
+            <div class="tab-pane fade" id="backtesting" role="tabpanel">
+                <h3 class="mb-3">Backtest AI Strategy</h3>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3"><label class="form-label">Start Date</label><input type="date" class="form-control" id="bt-start-date" value="2023-01-01"></div>
+                    <div class="col-md-3"><label class="form-label">End Date</label><input type="date" class="form-control" id="bt-end-date" value="2023-12-31"></div>
+                    <div class="col-md-3"><label class="form-label">Initial Capital</label><input type="number" class="form-control" id="bt-capital" value="10000"></div>
+                    <div class="col-md-3"><label class="form-label">Daily Investment</label><input type="number" class="form-control" id="bt-investment" value="100"></div>
+                    <div class="col-md-3"><label class="form-label">Category</label>
+                        <select class="form-select" id="bt-category">
+                            <option value="hot_stock">Hot Stocks</option>
+                            <option value="penny_stock">Penny Stocks</option>
+                            <option value="monthly_dividend">Monthly Dividend</option>
+                            <option value="high_yield">High Yield</option>
+                            <option value="crypto">Crypto</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3"><label class="form-label">Short MA</label><input type="number" class="form-control" id="bt-short-ma" value="50"></div>
+                    <div class="col-md-3"><label class="form-label">Long MA</label><input type="number" class="form-control" id="bt-long-ma" value="200"></div>
+                    <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100" onclick="runBacktest()">Run Backtest</button></div>
+                </div>
+                <div id="backtest-results-summary" class="row mb-3"></div>
+                <div class="chart-container" style="position: relative; height:400px;">
+                    <canvas id="backtest-chart"></canvas>
+                </div>
+            </div>
 
-            fetch(`${API_BASE_URL}/api/daily-pick/${categoryKey}`)
+            <!-- Settings Tab -->
+            <div class="tab-pane fade" id="settings" role="tabpanel">
+                <h3 class="mb-3">AI Strategy Settings</h3>
+                <div id="settings-container" class="row"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const API_BASE_URL = "{{ url_for('index', _external=False) }}".replace(/\/$/, '');
+    const CATEGORIES = ['hot_stock', 'penny_stock', 'monthly_dividend', 'high_yield', 'crypto'];
+    const WEIGHT_KEYS = ['momentum_weight', 'value_weight', 'ma_weight', 'volatility_weight', 'volume_weight', 'sentiment_weight'];
+
+    function createTickerLink(ticker) {
+        if (!ticker || ticker.includes('Error')) return `<span>${ticker}</span>`;
+        // Yahoo Finance URL logic handles both stock and crypto (e.g. BTC-USD)
+        return `<a href="https://finance.yahoo.com/quote/${ticker}" target="_blank" class="text-decoration-none fw-bold">${ticker}</a>`;
+    }
+
+    // --- Daily Picks ---
+    function populatePicks() {
+        const listGroup = document.getElementById('daily-picks-list');
+        listGroup.innerHTML = '';
+
+        CATEGORIES.forEach(category => {
+            const item = document.createElement('div');
+            item.className = 'list-group-item d-flex justify-content-between align-items-center';
+            item.innerHTML = `<span><i class="fas fa-spinner fa-spin"></i> ${category.replace(/_/g, ' ').toUpperCase()}</span>`;
+            listGroup.appendChild(item);
+
+            fetch(`${API_BASE_URL}/api/daily-pick/${category}`)
                 .then(response => response.json())
                 .then(data => {
-                    dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}</h2>`;
+                    item.innerHTML = `
+                        <div>
+                            <h6 class="mb-0 text-capitalize">${category.replace(/_/g, ' ')}</h6>
+                            <small class="text-muted">Pick: ${createTickerLink(data.ticker)}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#history-${category}">
+                            History
+                        </button>
+                    `;
+                    const historyDiv = document.createElement('div');
+                    historyDiv.className = 'collapse w-100 mt-2';
+                    historyDiv.id = `history-${category}`;
+                    let historyHtml = '<ul class="list-group list-group-flush small">';
                     if (data.history && data.history.length > 0) {
                         data.history.forEach(pick => {
-                            const li = document.createElement('li');
-                            li.innerHTML = `${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker)}`;
-                            historicalPicksUl.appendChild(li);
+                            historyHtml += `<li class="list-group-item bg-light py-1">${new Date(pick.pick_date).toLocaleDateString()}: ${createTickerLink(pick.ticker)}</li>`;
                         });
+                    } else {
+                        historyHtml += '<li class="list-group-item bg-light py-1">No history.</li>';
                     }
-                }).catch(err => {
-                    dailyPickDiv.innerHTML = `<p>Could not load pick data.</p>`;
-                    console.error('Error fetching picks:', err);
-                });
-        }
-
-        function renderPortfolioData(portfolioName, data) {
-            const summaryDiv = document.getElementById(`portfolio-summary-${portfolioName}`);
-            const holdingsTableBody = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('tbody');
-            const holdingsTableHead = document.getElementById(`portfolio-holdings-${portfolioName}`).querySelector('thead');
-
-            const gainLossClass = data.total_gain_loss >= 0 ? 'positive-return' : 'negative-return';
-            const gainLossSign = data.total_gain_loss >= 0 ? '+' : '';
-            summaryDiv.innerHTML = `
-                <div class="portfolio-metric"><span class="label">Total Invested</span><span class="value">$${data.total_invested.toFixed(2)}</span></div>
-                <div class="portfolio-metric"><span class="label">Market Value</span><span class="value">$${data.current_market_value.toFixed(2)}</span></div>
-                <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</span></div>
-                <div class="portfolio-metric"><span class="label">ROI</span><span class="value ${gainLossClass}">${data.roi_percentage.toFixed(2)}%</span></div>`;
-
-            holdingsTableHead.innerHTML = `<tr><th>Ticker</th><th>Shares</th><th>Cost Basis</th><th>Current Value</th><th>Gain / Loss</th><th>Actions</th></tr>`;
-            holdingsTableBody.innerHTML = '';
-            if (data.holdings && data.holdings.length > 0) {
-                data.holdings.forEach(h => {
-                    const row = holdingsTableBody.insertRow();
-                    const hGainLossClass = h.gain_loss >= 0 ? 'positive-return' : 'negative-return';
-                    const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
-                    row.innerHTML = `
-                        <td>${createTickerLink(h.ticker)}</td>
-                        <td>${h.shares.toFixed(6)}</td>
-                        <td>$${h.cost_basis.toFixed(2)}</td>
-                        <td class="${hGainLossClass}">$${h.current_value.toFixed(2)}</td>
-                        <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>
-                        <td><button onclick="sellStock('${portfolioName}', '${h.ticker}', ${h.shares})">Sell</button></td>`;
-                });
-            } else {
-                holdingsTableBody.innerHTML = `<tr><td colspan="6">No holdings yet.</td></tr>`;
-            }
-        }
-
-        function sellStock(portfolioName, ticker, maxShares) {
-            const sharesToSell = prompt(`How many shares of ${ticker} do you want to sell? (Max: ${maxShares.toFixed(6)})`, maxShares.toFixed(6));
-            if (sharesToSell === null || isNaN(sharesToSell) || sharesToSell <= 0 || sharesToSell > maxShares) {
-                alert("Invalid number of shares.");
-                return;
-            }
-
-            fetch(`${API_BASE_URL}/api/sell-stock`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    portfolio_name: portfolioName,
-                    ticker: ticker,
-                    shares: parseFloat(sharesToSell)
+                    historyHtml += '</ul>';
+                    historyDiv.innerHTML = historyHtml;
+                    item.appendChild(historyDiv);
+                    // Wrap content to handle collapse correctly within flex
+                    item.className = 'list-group-item flex-wrap';
                 })
-            })
+                .catch(err => {
+                    item.innerHTML = `<span>Error loading ${category}</span>`;
+                });
+        });
+    }
+
+    // --- Portfolios ---
+    function populateAllPortfolios() {
+        const container = document.getElementById('portfolios-container');
+        container.innerHTML = '<div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div></div>';
+
+        fetch(`${API_BASE_URL}/api/all-portfolios`)
             .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                if (data.status === 'success') {
-                    populateAllPortfolios();
+            .then(allData => {
+                container.innerHTML = '';
+                for (const [key, data] of Object.entries(allData)) {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-6 mb-4';
+
+                    const gainLossClass = data.total_gain_loss >= 0 ? 'text-success' : 'text-danger';
+                    const gainLossSign = data.total_gain_loss >= 0 ? '+' : '';
+
+                    let holdingsRows = '';
+                    if (data.holdings && data.holdings.length > 0) {
+                        data.holdings.forEach(h => {
+                            const hGainLossClass = h.gain_loss >= 0 ? 'text-success' : 'text-danger';
+                            const hGainLossSign = h.gain_loss >= 0 ? '+' : '';
+                            holdingsRows += `
+                                <tr>
+                                    <td>${createTickerLink(h.ticker)}</td>
+                                    <td>${h.shares.toFixed(4)}</td>
+                                    <td>$${h.current_value.toFixed(2)}</td>
+                                    <td class="${hGainLossClass}">${hGainLossSign}$${h.gain_loss.toFixed(2)}</td>
+                                    <td><button class="btn btn-xs btn-outline-danger py-0" onclick="sellStock('${key}', '${h.ticker}', ${h.shares})">Sell</button></td>
+                                </tr>`;
+                        });
+                    } else {
+                        holdingsRows = '<tr><td colspan="5" class="text-center">No holdings.</td></tr>';
+                    }
+
+                    col.innerHTML = `
+                        <div class="card shadow-sm h-100">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0 text-capitalize">${key.replace(/_/g, ' ')}</h5>
+                                <button class="btn btn-sm btn-success" onclick="triggerInvestment('${key}')"><i class="fas fa-plus"></i> Invest</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3 text-center">
+                                    <div class="col-6"><small class="text-muted">Market Value</small><br><strong>$${data.current_market_value.toFixed(2)}</strong></div>
+                                    <div class="col-6"><small class="text-muted">Gain/Loss</small><br><strong class="${gainLossClass}">${gainLossSign}$${data.total_gain_loss.toFixed(2)}</strong></div>
+                                </div>
+                                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover small">
+                                        <thead><tr><th>Ticker</th><th>Shares</th><th>Value</th><th>G/L</th><th>Action</th></tr></thead>
+                                        <tbody>${holdingsRows}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(col);
                 }
             })
             .catch(err => {
-                console.error('Error selling stock:', err);
-                alert('An error occurred while selling the stock.');
+                container.innerHTML = '<div class="alert alert-danger">Failed to load portfolios.</div>';
+                console.error(err);
             });
-        }
+    }
 
-        function populateAllPortfolios() {
-            const portfolioNames = ['main', 'monthly_dividend', 'daily_investment', 'high_yield_investment'];
-            portfolioNames.forEach(name => {
-                document.getElementById(`portfolio-summary-${name}`).innerHTML = SPINNER_HTML;
-                document.getElementById(`portfolio-holdings-${name}`).querySelector('tbody').innerHTML = '';
+    function triggerInvestment(portfolioName) {
+        if(!confirm(`Invest $5 into ${portfolioName}?`)) return;
+        fetch(`${API_BASE_URL}/api/trigger-investment/${portfolioName}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                if(data.status === 'success') populateAllPortfolios();
             });
+    }
 
-            fetch(`${API_BASE_URL}/api/all-portfolios`)
-                .then(response => response.json())
-                .then(allData => {
-                    for (const portfolioName in allData) {
-                        if (allData.hasOwnProperty(portfolioName)) {
-                            renderPortfolioData(portfolioName, allData[portfolioName]);
-                        }
-                    }
-                }).catch(err => {
-                    console.error('Error fetching all portfolios:', err);
-                    portfolioNames.forEach(name => {
-                        document.getElementById(`portfolio-summary-${name}`).innerHTML = `<p>Could not load portfolio data.</p>`;
-                    });
-                });
-        }
+    function sellStock(portfolioName, ticker, maxShares) {
+        const sharesToSell = prompt(`Sell ${ticker}. Max shares: ${maxShares.toFixed(6)}`, maxShares.toFixed(6));
+        if (!sharesToSell || isNaN(sharesToSell) || sharesToSell <= 0) return;
 
-        let backtestChart = null;
+        fetch(`${API_BASE_URL}/api/sell-stock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portfolio_name: portfolioName, ticker: ticker, shares: parseFloat(sharesToSell) })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message);
+            if (data.status === 'success') populateAllPortfolios();
+        });
+    }
 
-        function runBacktest() {
-            const summaryDiv = document.getElementById('backtest-results-summary');
-            summaryDiv.innerHTML = SPINNER_HTML;
+    // --- AI Performance ---
+    function populateAIPerformance() {
+        const summaryDiv = document.getElementById('ai-performance-summary');
 
-            const payload = {
-                start_date: document.getElementById('bt-start-date').value,
-                end_date: document.getElementById('bt-end-date').value,
-                initial_capital: document.getElementById('bt-capital').value,
-                investment_amount: document.getElementById('bt-investment').value,
-                category: document.getElementById('bt-category').value,
-                short_ma: document.getElementById('bt-short-ma').value,
-                long_ma: document.getElementById('bt-long-ma').value
-            };
-
-            fetch(`${API_BASE_URL}/api/backtest`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
+        fetch(`${API_BASE_URL}/api/ai-performance`)
             .then(response => response.json())
             .then(data => {
-                if (data.error) {
-                    summaryDiv.innerHTML = `<p>Error: ${data.error}</p>`;
-                    return;
-                }
-
-                const gainLoss = data.final_value - data.initial_capital;
-                const gainLossClass = gainLoss >= 0 ? 'positive-return' : 'negative-return';
-                const gainLossSign = gainLoss >= 0 ? '+' : '';
+                const gainLossClass = data.total_return_pct >= 0 ? 'text-success' : 'text-danger';
+                document.getElementById('ai-total-return').textContent = `${data.total_return_pct.toFixed(2)}% Return`;
+                document.getElementById('ai-total-return').className = `badge ${data.total_return_pct >= 0 ? 'bg-success' : 'bg-danger'}`;
 
                 summaryDiv.innerHTML = `
-                    <div class="portfolio-metric"><span class="label">Initial Capital</span><span class="value">$${data.initial_capital.toFixed(2)}</span></div>
-                    <div class="portfolio-metric"><span class="label">Final Value</span><span class="value">$${data.final_value.toFixed(2)}</span></div>
-                    <div class="portfolio-metric"><span class="label">Total Return</span><span class="value ${gainLossClass}">${data.total_return_pct.toFixed(2)}%</span></div>
-                    <div class="portfolio-metric"><span class="label">Gain / Loss</span><span class="value ${gainLossClass}">${gainLossSign}$${gainLoss.toFixed(2)}</span></div>`;
+                    <div class="col-4">
+                        <h6 class="text-muted">Total Return</h6>
+                        <h4 class="${gainLossClass}">${data.total_return_pct.toFixed(2)}%</h4>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-muted">Win/Loss Ratio</h6>
+                        <h4>${data.win_loss_ratio.toFixed(2)}</h4>
+                    </div>
+                    <div class="col-4">
+                        <h6 class="text-muted">vs S&P 500</h6>
+                        <h4 class="${data.vs_market >= 0 ? 'text-success' : 'text-danger'}">${data.vs_market >= 0 ? '+' : ''}${data.vs_market.toFixed(2)}%</h4>
+                    </div>
+                `;
 
-                const ctx = document.getElementById('backtest-chart').getContext('2d');
-                if (backtestChart) {
-                    backtestChart.destroy();
-                }
-                backtestChart = new Chart(ctx, {
+                const ctx = document.getElementById('ai-performance-chart').getContext('2d');
+                new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.portfolio_history.map(h => h.date),
                         datasets: [
-                            {
-                                label: 'Portfolio Value',
-                                data: data.portfolio_history.map(h => h.total_value),
-                                borderColor: 'rgb(75, 192, 192)',
-                                tension: 0.1
-                            },
-                            {
-                                label: 'Short MA',
-                                data: data.short_ma,
-                                borderColor: 'rgb(255, 159, 64)',
-                                tension: 0.1,
-                                hidden: true
-                            },
-                            {
-                                label: 'Long MA',
-                                data: data.long_ma,
-                                borderColor: 'rgb(255, 99, 132)',
-                                tension: 0.1,
-                                hidden: true
-                            }
+                            { label: 'AI Portfolio', data: data.portfolio_history.map(h => h.total_value), borderColor: 'rgb(75, 192, 192)', tension: 0.1 },
+                            { label: 'S&P 500', data: data.market_history.map(h => h.total_value), borderColor: 'rgb(255, 99, 132)', tension: 0.1 }
                         ]
                     },
-                    options: {
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                ticks: {
-                                    callback: function(value, index, values) {
-                                        return '$' + value.toLocaleString();
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    options: { maintainAspectRatio: false, scales: { y: { ticks: { callback: val => '$' + val.toLocaleString() } } } }
                 });
-            }).catch(err => {
-                summaryDiv.innerHTML = `<p>Could not run backtest.</p>`;
-                console.error('Error running backtest:', err);
             });
-        }
+    }
 
-        function renderSettings() {
-            const container = document.getElementById('settings-container');
-            container.innerHTML = '';
-            CATEGORIES.forEach(category => {
-                const categoryDiv = document.createElement('div');
-                categoryDiv.className = 'settings-category';
-                categoryDiv.innerHTML = `<h2>${category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</h2>`;
+    // --- Settings ---
+    function renderSettings() {
+        const container = document.getElementById('settings-container');
+        container.innerHTML = '';
+        CATEGORIES.forEach(category => {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 mb-4';
+            col.innerHTML = `
+                <div class="card h-100">
+                    <div class="card-header text-capitalize fw-bold">${category.replace(/_/g, ' ')}</div>
+                    <div class="card-body">
+                        <form id="settings-form-${category}">
+                            ${WEIGHT_KEYS.map(key => `
+                                <label class="form-label small mb-0">${key.replace(/_/g, ' ')}: <span id="val-${category}-${key}"></span></label>
+                                <input type="range" class="form-range" id="slider-${category}-${key}" name="${key}" min="0" max="1" step="0.05" oninput="document.getElementById('val-${category}-${key}').textContent = this.value">
+                            `).join('')}
+                            <button class="btn btn-primary btn-sm mt-3" onclick="event.preventDefault(); saveSettings('${category}')">Save Settings</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+            container.appendChild(col);
 
-                const form = document.createElement('form');
-                form.id = `settings-form-${category}`;
-
-                WEIGHT_KEYS.forEach(key => {
-                    const label = document.createElement('label');
-                    label.htmlFor = `slider-${category}-${key}`;
-                    label.textContent = `${key.replace(/_/g, ' ')}: `;
-
-                    const slider = document.createElement('input');
-                    slider.type = 'range';
-                    slider.id = `slider-${category}-${key}`;
-                    slider.name = key;
-                    slider.min = 0;
-                    slider.max = 1;
-                    slider.step = 0.05;
-
-                    const valueSpan = document.createElement('span');
-                    valueSpan.id = `value-${category}-${key}`;
-
-                    slider.oninput = () => { valueSpan.textContent = slider.value; };
-
-                    form.appendChild(label);
-                    form.appendChild(slider);
-                    form.appendChild(valueSpan);
-                    form.appendChild(document.createElement('br'));
-                });
-
-                const saveButton = document.createElement('button');
-                saveButton.textContent = 'Save Settings';
-                saveButton.onclick = (e) => {
-                    e.preventDefault();
-                    saveSettings(category);
-                };
-                form.appendChild(saveButton);
-
-                categoryDiv.appendChild(form);
-                container.appendChild(categoryDiv);
-
-                fetch(`${API_BASE_URL}/api/settings/${category}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        WEIGHT_KEYS.forEach(key => {
-                            const slider = document.getElementById(`slider-${category}-${key}`);
-                            const valueSpan = document.getElementById(`value-${category}-${key}`);
-                            slider.value = data[key];
-                            valueSpan.textContent = data[key];
-                        });
+            fetch(`${API_BASE_URL}/api/settings/${category}`)
+                .then(res => res.json())
+                .then(data => {
+                    WEIGHT_KEYS.forEach(key => {
+                        document.getElementById(`slider-${category}-${key}`).value = data[key];
+                        document.getElementById(`val-${category}-${key}`).textContent = data[key];
                     });
-            });
-        }
+                });
+        });
+    }
 
-        function runScreener() {
-            const resultsTableBody = document.getElementById('screener-results').querySelector('tbody');
-            resultsTableBody.innerHTML = SPINNER_HTML;
+    function saveSettings(category) {
+        const form = document.getElementById(`settings-form-${category}`);
+        const payload = {};
+        let total = 0;
+        WEIGHT_KEYS.forEach(key => {
+            const val = parseFloat(form.elements[key].value);
+            payload[key] = val;
+            total += val;
+        });
+        if (Math.abs(total - 1.0) > 0.01) return alert('Total weights must sum to 1.0');
 
-            const payload = {
-                market_cap_min: document.getElementById('screener-market-cap-min').value,
-                market_cap_max: document.getElementById('screener-market-cap-max').value,
-                pe_ratio_min: document.getElementById('screener-pe-ratio-min').value,
-                pe_ratio_max: document.getElementById('screener-pe-ratio-max').value,
-                dividend_yield_min: document.getElementById('screener-dividend-yield-min').value,
-                dividend_yield_max: document.getElementById('screener-dividend-yield-max').value,
-                sector: document.getElementById('screener-sector').value,
-            };
+        fetch(`${API_BASE_URL}/api/settings/${category}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => alert(data.message || data.error));
+    }
 
-            fetch(`${API_BASE_URL}/api/screener`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
-                const resultsTableHead = document.getElementById('screener-results').querySelector('thead');
-                resultsTableHead.innerHTML = `<tr><th>Ticker</th><th>Name</th><th>Market Cap</th><th>P/E Ratio</th><th>Dividend Yield</th><th>Sector</th></tr>`;
-                resultsTableBody.innerHTML = '';
-                if (data.length > 0) {
-                    data.forEach(stock => {
-                        const row = resultsTableBody.insertRow();
-                        row.innerHTML = `
+    // --- Screener ---
+    function runScreener() {
+        const tbody = document.getElementById('screener-results').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary"></div></td></tr>';
+
+        const payload = {
+            market_cap_min: document.getElementById('screener-market-cap-min').value,
+            market_cap_max: document.getElementById('screener-market-cap-max').value,
+            pe_ratio_min: document.getElementById('screener-pe-ratio-min').value,
+            pe_ratio_max: document.getElementById('screener-pe-ratio-max').value,
+            dividend_yield_min: document.getElementById('screener-dividend-yield-min').value,
+            dividend_yield_max: document.getElementById('screener-dividend-yield-max').value,
+            sector: document.getElementById('screener-sector').value,
+        };
+
+        fetch(`${API_BASE_URL}/api/screener`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            const thead = document.getElementById('screener-results').querySelector('thead');
+            thead.innerHTML = `<tr><th>Ticker</th><th>Name</th><th>Market Cap</th><th>P/E</th><th>Div Yield</th><th>Sector</th></tr>`;
+            tbody.innerHTML = '';
+            if (data.length > 0) {
+                data.forEach(stock => {
+                    tbody.innerHTML += `
+                        <tr>
                             <td>${createTickerLink(stock.ticker)}</td>
                             <td>${stock.name}</td>
                             <td>${stock.market_cap}</td>
                             <td>${stock.pe_ratio}</td>
                             <td>${stock.dividend_yield}</td>
-                            <td>${stock.sector}</td>`;
-                    });
-                } else {
-                    resultsTableBody.innerHTML = '<tr><td colspan="6">No results found.</td></tr>';
-                }
-            }).catch(err => {
-                resultsTableBody.innerHTML = '<tr><td colspan="6">An error occurred.</td></tr>';
-                console.error('Error running screener:', err);
-            });
-        }
-
-        function populateAIPerformance() {
-            const summaryDiv = document.getElementById('ai-performance-summary');
-            summaryDiv.innerHTML = SPINNER_HTML;
-
-            fetch(`${API_BASE_URL}/api/ai-performance`)
-                .then(response => response.json())
-                .then(data => {
-                    const gainLossClass = data.total_return_pct >= 0 ? 'positive-return' : 'negative-return';
-                    summaryDiv.innerHTML = `
-                        <div class="portfolio-metric"><span class="label">Total Return</span><span class="value ${gainLossClass}">${data.total_return_pct.toFixed(2)}%</span></div>
-                        <div class="portfolio-metric"><span class="label">Win/Loss Ratio</span><span class="value">${data.win_loss_ratio.toFixed(2)}</span></div>
-                        <div class="portfolio-metric"><span class="label">Performance vs S&P 500</span><span class="value ${data.vs_market >= 0 ? 'positive-return' : 'negative-return'}">${data.vs_market.toFixed(2)}%</span></div>
-                    `;
-
-                    const ctx = document.getElementById('ai-performance-chart').getContext('2d');
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: data.portfolio_history.map(h => h.date),
-                            datasets: [
-                                {
-                                    label: 'AI Portfolio Value',
-                                    data: data.portfolio_history.map(h => h.total_value),
-                                    borderColor: 'rgb(75, 192, 192)',
-                                    tension: 0.1
-                                },
-                                {
-                                    label: 'S&P 500',
-                                    data: data.market_history.map(h => h.total_value),
-                                    borderColor: 'rgb(255, 99, 132)',
-                                    tension: 0.1
-                                }
-                            ]
-                        },
-                        options: {
-                            scales: {
-                                y: {
-                                    beginAtZero: false,
-                                    ticks: {
-                                        callback: function(value, index, values) {
-                                            return '$' + value.toLocaleString();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }).catch(err => {
-                    summaryDiv.innerHTML = `<p>Could not load AI performance data.</p>`;
-                    console.error('Error fetching AI performance data:', err);
+                            <td>${stock.sector}</td>
+                        </tr>`;
                 });
-        }
+            } else {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No results found.</td></tr>';
+            }
+        });
+    }
 
-        function saveSettings(category) {
-            const form = document.getElementById(`settings-form-${category}`);
-            const payload = {};
-            let totalWeight = 0;
-            WEIGHT_KEYS.forEach(key => {
-                const value = parseFloat(form.elements[key].value);
-                payload[key] = value;
-                totalWeight += value;
-            });
+    // --- Backtesting ---
+    let backtestChart = null;
+    function runBacktest() {
+        document.getElementById('backtest-results-summary').innerHTML = '<div class="col-12 text-center"><div class="spinner-border text-primary"></div></div>';
+        const payload = {
+            start_date: document.getElementById('bt-start-date').value,
+            end_date: document.getElementById('bt-end-date').value,
+            initial_capital: document.getElementById('bt-capital').value,
+            investment_amount: document.getElementById('bt-investment').value,
+            category: document.getElementById('bt-category').value,
+            short_ma: document.getElementById('bt-short-ma').value,
+            long_ma: document.getElementById('bt-long-ma').value
+        };
 
-            if (Math.abs(totalWeight - 1.0) > 0.01) {
-                alert('Total weights must sum to 1.0');
+        fetch(`${API_BASE_URL}/api/backtest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => {
+            if (data.error) {
+                document.getElementById('backtest-results-summary').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
                 return;
             }
+            const gainLoss = data.final_value - data.initial_capital;
+            const gainLossClass = gainLoss >= 0 ? 'text-success' : 'text-danger';
 
-            fetch(`${API_BASE_URL}/api/settings/${category}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(response => response.json())
-              .then(data => {
-                  if(data.status === 'success') {
-                      alert('Settings saved successfully!');
-                  } else {
-                      alert('Error saving settings: ' + data.error);
-                  }
-              });
-        }
+            document.getElementById('backtest-results-summary').innerHTML = `
+                <div class="col-md-3 text-center"><h6>Final Value</h6><h4>$${data.final_value.toFixed(2)}</h4></div>
+                <div class="col-md-3 text-center"><h6>Total Return</h6><h4 class="${gainLossClass}">${data.total_return_pct.toFixed(2)}%</h4></div>
+                <div class="col-md-3 text-center"><h6>Gain/Loss</h6><h4 class="${gainLossClass}">$${gainLoss.toFixed(2)}</h4></div>
+                <div class="col-md-3 text-center"><h6>Max Drawdown</h6><h4 class="text-danger">${data.max_drawdown ? data.max_drawdown.toFixed(2) + '%' : 'N/A'}</h4></div>
+            `;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            CATEGORIES.forEach(populatePicks);
-            populateAllPortfolios();
-            populateAIPerformance();
-            renderSettings();
+            const ctx = document.getElementById('backtest-chart').getContext('2d');
+            if (backtestChart) backtestChart.destroy();
+            backtestChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.portfolio_history.map(h => h.date),
+                    datasets: [
+                        { label: 'Portfolio', data: data.portfolio_history.map(h => h.total_value), borderColor: 'rgb(75, 192, 192)', tension: 0.1 }
+                    ]
+                },
+                options: { maintainAspectRatio: false }
+            });
         });
-    </script>
-</body>
-</html>
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        populatePicks();
+        populateAllPortfolios();
+        populateAIPerformance();
+        renderSettings();
+    });
+</script>
+{% endblock %}
