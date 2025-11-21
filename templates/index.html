@@ -43,6 +43,30 @@
     </div>
 </div>
 
+<!-- AI Analysis Modal -->
+<div class="modal fade" id="analysisModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="analysisModalTitle">AI Analysis</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div style="height: 300px; width: 100%;">
+                    <canvas id="analysisRadarChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6 d-flex align-items-center">
+                <div id="analysisText" class="p-3 bg-light rounded"></div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Main Tabs -->
 <div class="card shadow-sm">
     <div class="card-header">
@@ -221,6 +245,8 @@
                         <div>
                             <h6 class="mb-0 text-capitalize">${category.replace(/_/g, ' ')}</h6>
                             <small class="text-muted">Pick: ${createTickerLink(data.ticker)}</small>
+                            <br>
+                            <a href="#" class="small text-primary" onclick="showAnalysis('${data.ticker}'); return false;">Why this pick?</a>
                         </div>
                         <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#history-${category}">
                             History
@@ -520,6 +546,59 @@
                 options: { maintainAspectRatio: false }
             });
         });
+    }
+
+    // --- AI Analysis ---
+    let analysisChart = null;
+
+    function showAnalysis(ticker) {
+        const modal = new bootstrap.Modal(document.getElementById('analysisModal'));
+        document.getElementById('analysisModalTitle').innerText = `AI Analysis: ${ticker}`;
+        document.getElementById('analysisText').innerHTML = '<div class="spinner-border text-primary"></div> Analyzing...';
+        modal.show();
+
+        fetch(`${API_BASE_URL}/api/ai-analysis/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    document.getElementById('analysisText').innerText = data.error;
+                    return;
+                }
+
+                // Format text summary with line breaks
+                document.getElementById('analysisText').innerHTML = data.summary.replace(/\n/g, '<br>');
+
+                // Chart
+                const ctx = document.getElementById('analysisRadarChart').getContext('2d');
+                if (analysisChart) analysisChart.destroy();
+
+                analysisChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: Object.keys(data.metrics),
+                        datasets: [{
+                            label: 'AI Score',
+                            data: Object.values(data.metrics),
+                            fill: true,
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            pointBackgroundColor: 'rgb(54, 162, 235)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgb(54, 162, 235)'
+                        }]
+                    },
+                    options: {
+                        elements: { line: { borderWidth: 3 } },
+                        scales: { r: { min: 0, max: 100 } },
+                        maintainAspectRatio: false
+                    }
+                });
+            })
+            .catch(err => {
+                document.getElementById('analysisText').innerText = "Failed to load analysis.";
+                console.error(err);
+            });
     }
 
     // --- New Listings ---

@@ -16,7 +16,7 @@ from database import (
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
     get_ai_performance_data, search_stocks_db, get_new_listings
 )
-from ai_picker import get_ai_recommendation
+from ai_picker import get_ai_recommendation, get_stock_analysis
 from backtesting import run_backtest
 from decimal import Decimal
 from models import User
@@ -335,6 +335,14 @@ def api_new_listings():
     days = request.args.get('days', 30)
     listings = get_new_listings(int(days))
     return jsonify(listings)
+
+@app.route('/api/ai-analysis/<ticker>')
+@login_required
+def api_ai_analysis(ticker):
+    analysis = get_stock_analysis(ticker)
+    if not analysis:
+        return jsonify({'error': 'Could not generate analysis'}), 404
+    return jsonify(analysis)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

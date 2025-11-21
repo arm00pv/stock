@@ -3,12 +3,27 @@ import yfinance as yf
 import pandas as pd
 import logging
 import requests
+import numpy as np
 from database import get_recently_picked_tickers, get_ai_settings
 
 logging.basicConfig(level=logging.INFO,
                     filename='ai_picker.log',
                     filemode='a',
                     format='%(asctime)s - %(levelname)s - %(message)s')
+
+def calculate_rsi(series, period=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def calculate_macd(series, fast=12, slow=26, signal=9):
+    exp1 = series.ewm(span=fast, adjust=False).mean()
+    exp2 = series.ewm(span=slow, adjust=False).mean()
+    macd = exp1 - exp2
+    signal_line = macd.ewm(span=signal, adjust=False).mean()
+    return macd, signal_line
 
 def get_news_sentiment(tickers):
     """
@@ -76,7 +91,7 @@ def get_ai_recommendation(category, tickers, price_limit=None, return_score=Fals
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
-            hist = stock.history(period="3mo")
+            hist = stock.history(period="6mo")
 
             if hist.empty: continue
 
@@ -105,6 +120,21 @@ def get_ai_recommendation(category, tickers, price_limit=None, return_score=Fals
             avg_volume = hist['Volume'].mean()
             score += min(avg_volume / 1_000_000, 10) * float(settings['volume_weight'])
 
+            # Technical Indicators
+            rsi = calculate_rsi(hist['Close']).iloc[-1]
+            if not pd.isna(rsi):
+                 # RSI < 30 is oversold (good buy), > 70 is overbought.
+                 # Score higher for oversold conditions in a "picking" context, unless momentum is key.
+                 # Let's treat RSI 40-60 as neutral, <40 as bullish (buy dip), >70 as bearish?
+                 # Actually, for a simple score: if RSI < 30, add points.
+                 if rsi < 30: score += 5
+                 elif rsi < 70: score += 2
+
+            macd, signal = calculate_macd(hist['Close'])
+            if not pd.isna(macd.iloc[-1]) and not pd.isna(signal.iloc[-1]):
+                if macd.iloc[-1] > signal.iloc[-1]:
+                    score += 5 # Bullish crossover
+
             sentiment_score = sentiment_scores.get(ticker, 0)
             score += (sentiment_score * 20) * float(settings['sentiment_weight'])
 
@@ -130,3 +160,64 @@ def get_ai_recommendation_score(category, ticker):
     """
     _, score = get_ai_recommendation(category, [ticker], return_score=True)
     return score
+
+def get_stock_analysis(ticker):
+    """
+    Returns a detailed analysis breakdown for a ticker.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="6mo")
+        if hist.empty: return None
+
+        info = stock.info
+        current_price = hist['Close'].iloc[-1]
+
+        # Calculations
+        momentum_score = ((current_price - hist['Close'].iloc[-30]) / hist['Close'].iloc[-30]) * 100 if len(hist) > 30 else 0
+
+        pe_ratio = info.get('trailingPE', info.get('forwardPE'))
+        value_score = 50 - pe_ratio if pe_ratio and pe_ratio > 0 else 0
+
+        returns = hist['Close'].pct_change().dropna()
+        volatility = returns.std() * (252**0.5)
+        volatility_score = 25 - (volatility * 50)
+
+        rsi = calculate_rsi(hist['Close']).iloc[-1]
+        macd, signal = calculate_macd(hist['Close'])
+        macd_val = macd.iloc[-1]
+        signal_val = signal.iloc[-1]
+
+        sentiment_scores = get_news_sentiment([ticker])
+        sentiment_val = sentiment_scores.get(ticker, 0)
+
+        # Generate Text Summary
+        summary = f"Analysis for {ticker}:\n"
+        summary += f"- Momentum: {'Positive' if momentum_score > 0 else 'Negative'} ({momentum_score:.2f}% 30-day change).\n"
+        if pe_ratio:
+            summary += f"- Valuation: P/E Ratio is {pe_ratio:.2f}. {'Undervalued' if pe_ratio < 15 else 'Overvalued' if pe_ratio > 25 else 'Fair value'}.\n"
+        summary += f"- Volatility: Annualized volatility is {volatility:.2f}. {'High' if volatility > 0.5 else 'Low'}.\n"
+        summary += f"- RSI: {rsi:.2f} ({'Oversold' if rsi < 30 else 'Overbought' if rsi > 70 else 'Neutral'}).\n"
+        summary += f"- MACD: {'Bullish' if macd_val > signal_val else 'Bearish'} trend.\n"
+        summary += f"- Sentiment: Score is {sentiment_val:.2f}.\n"
+
+        # Normalize scores for radar chart (0-100 scale approximation)
+        metrics = {
+            "Momentum": min(max(50 + momentum_score, 0), 100),
+            "Value": min(max(value_score + 50, 0), 100), # Pivot around 50
+            "Volatility": min(max(volatility_score + 50, 0), 100), # Higher score = Lower Volatility (better)
+            "RSI": rsi if not pd.isna(rsi) else 50,
+            "Sentiment": min(max(50 + (sentiment_val * 50), 0), 100),
+            "MACD_Strength": min(max(50 + (macd_val - signal_val)*10, 0), 100)
+        }
+
+        return {
+            "ticker": ticker,
+            "metrics": metrics,
+            "summary": summary,
+            "price": current_price
+        }
+
+    except Exception as e:
+        logging.error(f"Error generating analysis for {ticker}: {e}")
+        return None
