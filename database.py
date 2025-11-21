@@ -54,6 +54,19 @@ def init_db():
         )
     """)
 
+    # Stock Universe Table (from Alpha Vantage)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_universe (
+            symbol VARCHAR(20) PRIMARY KEY,
+            name VARCHAR(255),
+            exchange VARCHAR(50),
+            asset_type VARCHAR(50),
+            ipo_date DATE,
+            status VARCHAR(20),
+            INDEX idx_name (name)
+        )
+    """)
+
     # AI Settings Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ai_decision_log (
@@ -126,6 +139,57 @@ def save_ai_settings(category, weights):
         conn.commit()
     except mysql.connector.Error as err:
         print(f"Error saving AI settings: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+
+def search_stocks_db(query):
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor(dictionary=True)
+    search_term = f"%{query}%"
+    # Prioritize exact match on symbol, then starts with, then contains
+    sql = """
+        SELECT symbol, name, exchange, asset_type
+        FROM stock_universe
+        WHERE symbol LIKE %s OR name LIKE %s
+        ORDER BY
+            CASE
+                WHEN symbol = %s THEN 1
+                WHEN symbol LIKE %s THEN 2
+                ELSE 3
+            END,
+            symbol ASC
+        LIMIT 10
+    """
+    try:
+        cursor.execute(sql, (search_term, search_term, query, f"{query}%"))
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error searching stocks: {err}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_new_listings(days=30):
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor(dictionary=True)
+    cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+    sql = """
+        SELECT symbol, name, exchange, asset_type, ipo_date
+        FROM stock_universe
+        WHERE ipo_date >= %s
+        ORDER BY ipo_date DESC
+        LIMIT 20
+    """
+    try:
+        cursor.execute(sql, (cutoff_date,))
+        return cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching new listings: {err}")
+        return []
     finally:
         cursor.close()
         conn.close()

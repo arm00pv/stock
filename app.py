@@ -14,7 +14,7 @@ from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
-    get_ai_performance_data
+    get_ai_performance_data, search_stocks_db, get_new_listings
 )
 from ai_picker import get_ai_recommendation
 from backtesting import run_backtest
@@ -321,6 +321,20 @@ def api_save_settings(category):
 
     save_ai_settings(category, data)
     return jsonify({'status': 'success', 'message': 'Settings saved successfully.'})
+
+@app.route('/api/search')
+def api_search_stocks():
+    query = request.args.get('q', '')
+    if len(query) < 2:
+        return jsonify([])
+    results = search_stocks_db(query)
+    return jsonify(results)
+
+@app.route('/api/new-listings')
+def api_new_listings():
+    days = request.args.get('days', 30)
+    listings = get_new_listings(int(days))
+    return jsonify(listings)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

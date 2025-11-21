@@ -23,6 +23,12 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                {% if current_user.is_authenticated %}
+                <form class="d-flex mx-auto position-relative" style="max-width: 400px; width: 100%;">
+                    <input class="form-control me-2" type="search" placeholder="Search stocks..." aria-label="Search" id="global-stock-search" autocomplete="off">
+                    <div id="search-results-dropdown" class="list-group position-absolute w-100 shadow" style="top: 40px; z-index: 1000; display: none;"></div>
+                </form>
+                {% endif %}
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
@@ -67,6 +73,57 @@
 
     <!-- Bootstrap 5 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% if current_user.is_authenticated %}
+    <script>
+        const searchInput = document.getElementById('global-stock-search');
+        const searchDropdown = document.getElementById('search-results-dropdown');
+        let searchTimeout = null;
+
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            clearTimeout(searchTimeout);
+            if (query.length < 2) {
+                searchDropdown.style.display = 'none';
+                return;
+            }
+
+            searchTimeout = setTimeout(() => {
+                fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        searchDropdown.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                const a = document.createElement('a');
+                                a.href = `https://finance.yahoo.com/quote/${item.symbol}`;
+                                a.target = "_blank";
+                                a.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                                a.innerHTML = `
+                                    <div>
+                                        <strong>${item.symbol}</strong> <small class="text-muted">${item.name}</small>
+                                    </div>
+                                    <span class="badge bg-secondary rounded-pill">${item.asset_type}</span>
+                                `;
+                                searchDropdown.appendChild(a);
+                            });
+                            searchDropdown.style.display = 'block';
+                        } else {
+                            searchDropdown.innerHTML = '<div class="list-group-item">No results found</div>';
+                            searchDropdown.style.display = 'block';
+                        }
+                    });
+            }, 300);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (e.target !== searchInput && e.target !== searchDropdown) {
+                searchDropdown.style.display = 'none';
+            }
+        });
+    </script>
+    {% endif %}
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

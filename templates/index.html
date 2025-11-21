@@ -54,6 +54,9 @@
                 <button class="nav-link" id="screener-tab" data-bs-toggle="tab" data-bs-target="#screener" type="button" role="tab">Stock Screener</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="new-listings-tab" data-bs-toggle="tab" data-bs-target="#new-listings" type="button" role="tab">New Listings (IPOs)</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="backtesting-tab" data-bs-toggle="tab" data-bs-target="#backtesting" type="button" role="tab">Backtesting</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -69,6 +72,27 @@
                 <div class="row" id="portfolios-container">
                     <!-- Portfolio cards will be injected here -->
                     <div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div></div>
+                </div>
+            </div>
+
+            <!-- New Listings Tab -->
+            <div class="tab-pane fade" id="new-listings" role="tabpanel">
+                <h3 class="mb-3">Recent IPOs & New Listings</h3>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover" id="new-listings-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Name</th>
+                                <th>Exchange</th>
+                                <th>Asset Type</th>
+                                <th>IPO Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -498,11 +522,44 @@
         });
     }
 
+    // --- New Listings ---
+    function loadNewListings() {
+        const tbody = document.getElementById('new-listings-table').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center"><div class="spinner-border text-primary"></div></td></tr>';
+
+        fetch(`${API_BASE_URL}/api/new-listings?days=90`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        const ipoDate = new Date(item.ipo_date).toLocaleDateString();
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${createTickerLink(item.symbol)}</td>
+                                <td>${item.name}</td>
+                                <td>${item.exchange}</td>
+                                <td><span class="badge bg-info text-dark">${item.asset_type}</span></td>
+                                <td>${ipoDate}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center">No new listings in the last 90 days.</td></tr>';
+                }
+            });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         populatePicks();
         populateAllPortfolios();
         populateAIPerformance();
         renderSettings();
+
+        // Load new listings when tab is clicked to save resources, or just load once
+        document.getElementById('new-listings-tab').addEventListener('shown.bs.tab', function (e) {
+            loadNewListings();
+        });
     });
 </script>
 {% endblock %}
