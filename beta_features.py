@@ -215,3 +215,121 @@ def check_user_alerts(user_id):
         return []
     finally:
         conn.close()
+
+def get_candlestick_patterns():
+    """
+    Scans SP500 for candlestick patterns: Bullish Engulfing, Hammer.
+    """
+    tickers = SP500_TICKERS
+    patterns = []
+
+    try:
+        data = yf.download(tickers, period="5d", progress=False) # Need Open, High, Low, Close
+        if data.empty or 'Close' not in data or 'Open' not in data: return []
+
+        close = data['Close']
+        open_ = data['Open']
+        high = data['High']
+        low = data['Low']
+
+        for ticker in tickers:
+            try:
+                if ticker not in close: continue
+
+                c = close[ticker].dropna()
+                o = open_[ticker].dropna()
+                h = high[ticker].dropna()
+                l = low[ticker].dropna()
+
+                if len(c) < 2: continue
+
+                # Today and Yesterday
+                c0, c1 = c.iloc[-1], c.iloc[-2]
+                o0, o1 = o.iloc[-1], o.iloc[-2]
+                h0 = h.iloc[-1]
+                l0 = l.iloc[-1]
+
+                detected = []
+
+                # Bullish Engulfing
+                # Prev candle red (C < O), Curr candle green (C > O)
+                # Curr Open < Prev Close, Curr Close > Prev Open (Engulfs body)
+                if c1 < o1 and c0 > o0:
+                    if o0 < c1 and c0 > o1:
+                        detected.append("Bullish Engulfing")
+
+                # Hammer
+                # Small body near high, long lower shadow (> 2x body)
+                body = abs(c0 - o0)
+                lower_shadow = min(c0, o0) - l0
+                upper_shadow = h0 - max(c0, o0)
+
+                if lower_shadow > 2 * body and upper_shadow < body:
+                    detected.append("Hammer")
+
+                if detected:
+                    patterns.append({
+                        "ticker": ticker,
+                        "pattern": ", ".join(detected),
+                        "price": float(c0)
+                    })
+            except: continue
+
+    except Exception as e:
+        logging.error(f"Error scanning patterns: {e}")
+
+    return patterns
+
+def get_advanced_ticker_details(ticker):
+    """
+    Fetches advanced details: ESG, Recommendations, and Chart Data (SMA, BB).
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+
+        # ESG - yfinance often doesn't provide ESG in free tier reliably via .info or .sustainability
+        # We will try to get what we can or use placeholders if missing
+        esg_score = "N/A"
+        recommendation = info.get('recommendationKey', 'N/A').replace('_', ' ').title()
+        target_price = info.get('targetMeanPrice', 'N/A')
+
+        # Chart Data Calculation
+        hist = stock.history(period="6mo")
+        if hist.empty: return None
+
+        # SMA
+        hist['SMA_20'] = hist['Close'].rolling(window=20).mean()
+        hist['SMA_50'] = hist['Close'].rolling(window=50).mean()
+
+        # Bollinger Bands
+        hist['Middle_Band'] = hist['Close'].rolling(window=20).mean()
+        std = hist['Close'].rolling(window=20).std()
+        hist['Upper_Band'] = hist['Middle_Band'] + (2 * std)
+        hist['Lower_Band'] = hist['Middle_Band'] - (2 * std)
+
+        # Format for Chart.js
+        # We'll return lists of {t, y} for time series, or just labels/values
+        labels = hist.index.strftime('%Y-%m-%d').tolist()
+        chart_data = {
+            'labels': labels,
+            'price': hist['Close'].fillna(0).tolist(),
+            'sma20': hist['SMA_20'].fillna(0).tolist(),
+            'sma50': hist['SMA_50'].fillna(0).tolist(),
+            'bb_upper': hist['Upper_Band'].fillna(0).tolist(),
+            'bb_lower': hist['Lower_Band'].fillna(0).tolist()
+        }
+
+        return {
+            'ticker': ticker,
+            'name': info.get('shortName', ticker),
+            'sector': info.get('sector', 'N/A'),
+            'recommendation': recommendation,
+            'target_price': target_price,
+            'esg_score': esg_score,
+            'chart_data': chart_data
+        }
+
+    except Exception as e:
+        logging.error(f"Error fetching advanced details for {ticker}: {e}")
+        return None

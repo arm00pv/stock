@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile
@@ -524,6 +524,24 @@ def api_beta_correlation():
 
     result = get_correlation_matrix(tickers)
     return jsonify(result)
+
+@app.route('/api/beta/patterns')
+@login_required
+def api_beta_patterns():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_candlestick_patterns())
+
+@app.route('/api/beta/ticker-details/<ticker>')
+@login_required
+def api_beta_ticker_details(ticker):
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    details = get_advanced_ticker_details(ticker)
+    if not details:
+        return jsonify({'error': 'Details not found'}), 404
+    return jsonify(details)
 
 @app.route('/api/market-status')
 def api_market_status():

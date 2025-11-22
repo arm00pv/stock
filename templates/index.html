@@ -244,6 +244,19 @@
 
                 <div class="row mt-4">
                     <div class="col-md-12">
+                        <h3 class="mb-3"><i class="fas fa-chart-candlestick"></i> Pattern Scanner</h3>
+                        <p class="text-muted">Scanning for Bullish Engulfing and Hammer patterns.</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover" id="patterns-table">
+                                <thead><tr><th>Ticker</th><th>Price</th><th>Pattern</th><th>Action</th></tr></thead>
+                                <tbody><tr><td colspan="4" class="text-center">Scanning...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-12">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
                                 <span><i class="fas fa-bell"></i> Price Alerts</span>
@@ -489,6 +502,9 @@
                             <small class="text-muted">Pick: ${createTickerLink(data.ticker)}</small>
                             <br>
                             <a href="#" class="small text-primary" onclick="showAnalysis('${data.ticker}'); return false;">Why this pick?</a>
+                            {% if current_user.beta_active %}
+                            <a href="#" class="small text-info ms-2" onclick="showProDetails('${data.ticker}'); return false;">Pro View</a>
+                            {% endif %}
                         </div>
                         <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#history-${category}">
                             History
@@ -623,6 +639,61 @@
             <hr>
             <h5>Badges</h5>
             <div id="profile-badges"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pro Details Modal -->
+<div class="modal fade" id="proDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="proDetailsTitle">Pro Analysis</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <small>Recommendation</small>
+                        <h5 id="pro-rec">Loading...</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <small>Target Price</small>
+                        <h5 id="pro-target">Loading...</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <small>ESG Score</small>
+                        <h5 id="pro-esg">Loading...</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <small>Sector</small>
+                        <h5 id="pro-sector">Loading...</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <div style="height: 400px; width: 100%;">
+                    <canvas id="proChart"></canvas>
+                </div>
+            </div>
         </div>
       </div>
     </div>
@@ -1257,6 +1328,30 @@
         // Also load Smart Signals and Alerts
         loadSmartSignals();
         loadAlerts();
+        loadPatterns();
+    }
+
+    function loadPatterns() {
+        const tbody = document.getElementById('patterns-table').querySelector('tbody');
+        fetch(`${API_BASE_URL}/api/beta/patterns`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${createTickerLink(item.ticker)}</td>
+                                <td>$${item.price.toFixed(2)}</td>
+                                <td><span class="badge bg-info text-dark">${item.pattern}</span></td>
+                                <td><button class="btn btn-sm btn-outline-secondary" onclick="showProDetails('${item.ticker}')">View</button></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No patterns detected.</td></tr>';
+                }
+            });
     }
 
     function loadSmartSignals() {
@@ -1384,6 +1479,75 @@
     }
 
     // --- Correlation Matrix ---
+    let proChart = null;
+    function showProDetails(ticker) {
+        const modal = new bootstrap.Modal(document.getElementById('proDetailsModal'));
+        document.getElementById('proDetailsTitle').innerText = `Pro Analysis: ${ticker}`;
+        modal.show();
+
+        fetch(`${API_BASE_URL}/api/beta/ticker-details/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) return alert(data.error);
+
+                document.getElementById('pro-rec').innerText = data.recommendation;
+                document.getElementById('pro-target').innerText = data.target_price !== 'N/A' ? '$' + data.target_price : 'N/A';
+                document.getElementById('pro-esg').innerText = data.esg_score;
+                document.getElementById('pro-sector').innerText = data.sector;
+
+                const ctx = document.getElementById('proChart').getContext('2d');
+                if (proChart) proChart.destroy();
+
+                proChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.chart_data.labels,
+                        datasets: [
+                            {
+                                label: 'Price',
+                                data: data.chart_data.price,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'SMA 20',
+                                data: data.chart_data.sma20,
+                                borderColor: 'rgba(255, 206, 86, 0.8)',
+                                borderWidth: 1,
+                                pointRadius: 0
+                            },
+                            {
+                                label: 'Upper Band',
+                                data: data.chart_data.bb_upper,
+                                borderColor: 'rgba(54, 162, 235, 0.3)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                fill: '+1',
+                                pointRadius: 0,
+                                borderWidth: 0
+                            },
+                            {
+                                label: 'Lower Band',
+                                data: data.chart_data.bb_lower,
+                                borderColor: 'rgba(54, 162, 235, 0.3)',
+                                pointRadius: 0,
+                                borderWidth: 0
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: { enabled: true }
+                        }
+                    }
+                });
+            });
+    }
+
     function showCorrelationModal() {
         const modal = new bootstrap.Modal(document.getElementById('correlationModal'));
         modal.show();
