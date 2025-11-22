@@ -129,7 +129,10 @@
 
             <!-- History Tab -->
             <div class="tab-pane fade" id="history" role="tabpanel">
-                <h3 class="mb-3">Transaction History</h3>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>Transaction History</h3>
+                    <a href="{{ url_for('api_export_history') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-download"></i> Export CSV</a>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-hover" id="history-table">
                         <thead>
@@ -289,6 +292,14 @@
                             <option value="monthly_dividend">Monthly Dividend</option>
                             <option value="high_yield">High Yield</option>
                             <option value="crypto">Crypto</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3"><label class="form-label">Strategy</label>
+                        <select class="form-select" id="bt-strategy">
+                            <option value="ai_score">AI Score (Default)</option>
+                            <option value="ma_crossover">MA Crossover (20/50)</option>
+                            <option value="rsi_reversal">RSI Reversal (< 30)</option>
+                            <option value="macd_trend">MACD Trend Follow</option>
                         </select>
                     </div>
                     <div class="col-md-3"><label class="form-label">Short MA</label><input type="number" class="form-control" id="bt-short-ma" value="50"></div>
@@ -697,6 +708,7 @@
             initial_capital: document.getElementById('bt-capital').value,
             investment_amount: document.getElementById('bt-investment').value,
             category: document.getElementById('bt-category').value,
+            strategy: document.getElementById('bt-strategy').value,
             short_ma: document.getElementById('bt-short-ma').value,
             long_ma: document.getElementById('bt-long-ma').value
         };

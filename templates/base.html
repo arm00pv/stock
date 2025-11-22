@@ -12,6 +12,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Dark mode overrides */
+        [data-bs-theme="dark"] .bg-light { background-color: #2b3035 !important; }
+        [data-bs-theme="dark"] .card-header.bg-light { background-color: #343a40 !important; }
+        [data-bs-theme="dark"] .text-muted { color: #adb5bd !important; }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
@@ -30,6 +36,9 @@
                 </form>
                 {% endif %}
                 <ul class="navbar-nav ms-auto">
+                    <li class="nav-item me-2">
+                        <button class="btn btn-link nav-link" id="darkModeToggle"><i class="fas fa-moon"></i></button>
+                    </li>
                     {% if current_user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
@@ -123,6 +132,30 @@
         });
     </script>
     {% endif %}
+
+    <script>
+        // Dark Mode Logic
+        const toggleBtn = document.getElementById('darkModeToggle');
+        const html = document.documentElement;
+
+        // Check local storage
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            toggleBtn.innerHTML = '<i class="fas fa-sun"></i>';
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                toggleBtn.innerHTML = '<i class="fas fa-moon"></i>';
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                toggleBtn.innerHTML = '<i class="fas fa-sun"></i>';
+            }
+        });
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>

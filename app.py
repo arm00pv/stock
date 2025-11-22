@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, Response
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -266,6 +266,7 @@ def api_backtest():
     initial_capital = float(data.get('initial_capital', 10000))
     investment_amount = float(data.get('investment_amount', 100))
     category = data.get('category')
+    strategy = data.get('strategy', 'ai_score') # Default to AI Score
 
     if not all([start_date, end_date, category]):
         return jsonify({'error': 'Missing required parameters'}), 400
@@ -274,7 +275,7 @@ def api_backtest():
     if not tickers:
         return jsonify({'error': 'Invalid category'}), 400
 
-    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers)
+    results = run_backtest(start_date, end_date, initial_capital, investment_amount, category, tickers, 50, 200, strategy)
     return jsonify(results)
 
 @app.route('/api/settings/<category>', methods=['GET'])
@@ -489,6 +490,27 @@ def api_allocation():
             'value': float(row['total_invested']) + float(row['cash_balance'])
         })
     return jsonify(result)
+
+@app.route('/api/export-history')
+@login_required
+def api_export_history():
+    transactions = get_all_transactions()
+    if not transactions:
+        return Response("No transactions to export", status=204)
+
+    # Convert to DataFrame
+    df = pd.DataFrame(transactions)
+    # Format data
+    df['shares'] = df['shares'].astype(float)
+    df['purchase_price'] = df['purchase_price'].astype(float)
+
+    csv_data = df.to_csv(index=False)
+
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=transactions.csv"}
+    )
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

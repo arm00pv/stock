@@ -90,10 +90,66 @@ def get_historical_recommendation(current_date, hist_data, tickers, sentiment_sc
     if not scored_tickers: return tickers[0] if tickers else None
     return sorted(scored_tickers, key=lambda x: x[1], reverse=True)[0][0]
 
+def get_technical_recommendation(current_date, hist_data, tickers, strategy='ma_crossover'):
+    scored_tickers = []
+
+    for ticker in tickers:
+        try:
+            ticker_hist = hist_data[hist_data.index < current_date]
+            # Need enough data for indicators
+            if len(ticker_hist) < 60: continue
+
+            close = ticker_hist[('Close', ticker)]
+            if close.isna().all(): continue
+
+            score = 0
+            current_price = close.iloc[-1]
+
+            if strategy == 'rsi_reversal':
+                # RSI calculation
+                delta = close.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                rs = gain / loss
+                rsi = 100 - (100 / (1 + rs))
+
+                current_rsi = rsi.iloc[-1]
+                # Buy if RSI < 30 (Oversold)
+                if not pd.isna(current_rsi) and current_rsi < 30:
+                    score = 100 + (30 - current_rsi) # Higher score for lower RSI
+
+            elif strategy == 'macd_trend':
+                # MACD calculation
+                exp1 = close.ewm(span=12, adjust=False).mean()
+                exp2 = close.ewm(span=26, adjust=False).mean()
+                macd = exp1 - exp2
+                signal = macd.ewm(span=9, adjust=False).mean()
+
+                # Buy if MACD crosses above Signal
+                if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
+                    score = 100
+
+            else: # Default 'ma_crossover' (or similar basic logic)
+                # Reusing part of the original logic but simpler for this mode
+                # Buy if 20MA > 50MA
+                ma_20 = close.rolling(window=20).mean().iloc[-1]
+                ma_50 = close.rolling(window=50).mean().iloc[-1]
+                if ma_20 > ma_50:
+                    score = 50
+
+            if score > 0:
+                scored_tickers.append((ticker, score))
+
+        except Exception as e:
+            continue
+
+    if not scored_tickers: return None
+    return sorted(scored_tickers, key=lambda x: x[1], reverse=True)[0][0]
+
 from cache import yf_download_cached
 
-def run_backtest(start_date_str, end_date_str, initial_capital, investment_amount, category, tickers, short_ma, long_ma):
-    logging.info(f"Starting backtest for {category} from {start_date_str} to {end_date_str}")
+def run_backtest(start_date_str, end_date_str, initial_capital, investment_amount, category, tickers, short_ma, long_ma, strategy='ai_score'):
+    logging.info(f"Starting backtest for {category} from {start_date_str} to {end_date_str} with strategy {strategy}")
 
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
@@ -117,10 +173,15 @@ def run_backtest(start_date_str, end_date_str, initial_capital, investment_amoun
             continue
 
         day_str = day.strftime('%Y-%m-%d')
-        sentiment_scores = get_historical_news_sentiment(day_str, tickers)
 
         day_hist_data = hist_data[hist_data.index < day]
-        recommended_ticker = get_historical_recommendation(day, day_hist_data, tickers, sentiment_scores)
+        recommended_ticker = None
+
+        if strategy == 'ai_score':
+            sentiment_scores = get_historical_news_sentiment(day_str, tickers)
+            recommended_ticker = get_historical_recommendation(day, day_hist_data, tickers, sentiment_scores)
+        else:
+            recommended_ticker = get_technical_recommendation(day, day_hist_data, tickers, strategy)
 
         if recommended_ticker:
             try:
