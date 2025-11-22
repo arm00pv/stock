@@ -43,3 +43,46 @@ def get_public_profile(username):
             }
     finally:
         conn.close()
+
+def cast_vote(user_id, ticker, vote):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO community_votes (user_id, ticker, vote) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE vote = VALUES(vote)",
+                (user_id, ticker, vote)
+            )
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error casting vote: {e}")
+        return False
+    finally:
+        conn.close()
+
+def get_ticker_sentiment(ticker):
+    conn = get_db_connection()
+    if not conn: return {'bullish': 0, 'bearish': 0, 'total': 0}
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute(
+                "SELECT vote, COUNT(*) as count FROM community_votes WHERE ticker = %s GROUP BY vote",
+                (ticker,)
+            )
+            votes = cursor.fetchall()
+            result = {'BULLISH': 0, 'BEARISH': 0}
+            for v in votes:
+                result[v['vote']] = v['count']
+
+            total = result['BULLISH'] + result['BEARISH']
+            bull_pct = (result['BULLISH'] / total * 100) if total > 0 else 0
+            bear_pct = (result['BEARISH'] / total * 100) if total > 0 else 0
+
+            return {
+                'bullish_pct': bull_pct,
+                'bearish_pct': bear_pct,
+                'total': total
+            }
+    finally:
+        conn.close()

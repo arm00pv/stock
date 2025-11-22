@@ -118,6 +118,71 @@ def get_correlation_matrix(tickers):
         logging.error(f"Error calculating correlation: {e}")
         return {}
 
+def compare_stocks(tickers):
+    """
+    Compares performance and basic stats for a list of tickers.
+    """
+    results = []
+    try:
+        if not tickers: return []
+
+        data = yf.download(tickers, period="1y", progress=False)
+        if data.empty or 'Close' not in data: return []
+
+        close = data['Close']
+
+        for ticker in tickers:
+            if ticker not in close: continue
+
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                series = close[ticker].dropna()
+
+                if len(series) == 0: continue
+
+                current_price = series.iloc[-1]
+                start_price = series.iloc[0]
+                perf_1y = ((current_price - start_price) / start_price) * 100
+
+                # Normalize history for chart
+                # Reindex to match the global close index to ensure alignment
+                aligned_series = series.reindex(close.index)
+
+                # Calculate percentage change relative to the first valid point
+                # For plotting, we want to show 0% at the start of *this stock's* data or aligned start?
+                # If aligned start is NaN, we can't show % change from global start.
+                # Better: Show % change from *its own* start, but padded with Nulls at the beginning.
+
+                first_valid_idx = series.first_valid_index()
+                if first_valid_idx:
+                    base_price = series.loc[first_valid_idx]
+                    normalized_series = (aligned_series / base_price * 100) - 100
+                else:
+                    normalized_series = aligned_series # All NaNs
+
+                # Replace NaN with None for JSON compatibility (Chart.js handles null)
+                chart_data = normalized_series.where(pd.notnull(normalized_series), None).tolist()
+
+                results.append({
+                    'ticker': ticker,
+                    'name': info.get('shortName', ticker),
+                    'price': float(current_price),
+                    'pe_ratio': info.get('trailingPE', 'N/A'),
+                    'market_cap': info.get('marketCap', 'N/A'),
+                    'perf_1y': float(perf_1y),
+                    'chart_data': chart_data
+                })
+            except: continue
+
+        # Common labels (dates) - roughly
+        labels = close.index.strftime('%Y-%m-%d').tolist()
+        return {'data': results, 'labels': labels}
+
+    except Exception as e:
+        logging.error(f"Error comparing stocks: {e}")
+        return {}
+
 def get_user_alerts(user_id):
     conn = get_db_connection()
     if not conn: return []

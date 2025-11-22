@@ -79,6 +79,18 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS community_votes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            ticker VARCHAR(20) NOT NULL,
+            vote VARCHAR(10) NOT NULL,
+            voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_vote (user_id, ticker),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # Personal Portfolio Tables
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS user_portfolios (

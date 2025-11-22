@@ -24,10 +24,10 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
-from social import get_public_profile
+from social import get_public_profile, cast_vote, get_ticker_sentiment
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -524,6 +524,39 @@ def api_beta_correlation():
 
     result = get_correlation_matrix(tickers)
     return jsonify(result)
+
+@app.route('/api/beta/compare', methods=['POST'])
+@login_required
+def api_beta_compare():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    tickers = [t.upper().strip() for t in tickers if t]
+
+    if len(tickers) < 2:
+        return jsonify({'error': 'At least 2 valid tickers required.'}), 400
+
+    result = compare_stocks(tickers)
+    return jsonify(result)
+
+@app.route('/api/community/vote', methods=['POST', 'GET'])
+@login_required
+def api_community_vote():
+    if request.method == 'GET':
+        ticker = request.args.get('ticker')
+        return jsonify(get_ticker_sentiment(ticker))
+
+    data = request.get_json()
+    ticker = data.get('ticker')
+    vote = data.get('vote')
+
+    if not ticker or vote not in ['BULLISH', 'BEARISH']:
+        return jsonify({'status': 'error'}), 400
+
+    success = cast_vote(current_user.id, ticker, vote)
+    return jsonify({'status': 'success' if success else 'error'})
 
 @app.route('/api/beta/patterns')
 @login_required
