@@ -20,11 +20,12 @@ from database import (
 )
 from ai_picker import get_ai_recommendation, get_stock_analysis, get_latest_news
 from ai_prediction import get_sp500_predictions
-from market_data import get_market_status
+from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
 from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts
+from gamification import get_user_badges, check_and_award_badges
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -597,9 +598,24 @@ def api_personal_trade():
 
     success, message = execute_user_trade(current_user.id, ticker, action, amount)
     if success:
-        return jsonify({'status': 'success', 'message': message})
+        # Check badges
+        new_badges = check_and_award_badges(current_user.id)
+        msg = message
+        if new_badges:
+            msg += f" You unlocked: {', '.join(new_badges)}!"
+        return jsonify({'status': 'success', 'message': msg})
     else:
         return jsonify({'status': 'error', 'message': message}), 400
+
+@app.route('/api/achievements')
+@login_required
+def api_achievements():
+    badges = get_user_badges(current_user.id)
+    return jsonify(badges)
+
+@app.route('/api/sectors')
+def api_sectors():
+    return jsonify(get_sector_performance())
 
 @app.route('/api/leaderboard')
 @login_required

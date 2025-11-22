@@ -11,9 +11,21 @@
 </div>
 
 <div class="row mb-4">
-    <div class="col-md-12">
+    <div class="col-md-8">
         <h1 class="display-4">AI Dashboard</h1>
         <p class="lead">Your AI-powered investment assistant.</p>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-light py-2">
+                <strong>Sector Performance (5d)</strong>
+            </div>
+            <div class="card-body p-0">
+                <div style="height: 150px; width: 100%;">
+                    <canvas id="sectorChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -973,7 +985,42 @@
 
         loadMarketStatus();
         loadAllocationChart();
+        loadSectorChart();
     });
+
+    // --- Sector Chart ---
+    function loadSectorChart() {
+        fetch(`${API_BASE_URL}/api/sectors`)
+            .then(res => res.json())
+            .then(data => {
+                const ctx = document.getElementById('sectorChart').getContext('2d');
+                // Sort by performance
+                const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+                const labels = sorted.map(s => s[0]);
+                const values = sorted.map(s => s[1]);
+                const colors = values.map(v => v >= 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)');
+
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '5d % Change',
+                            data: values,
+                            backgroundColor: colors,
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: { display: false } } }
+                    }
+                });
+            });
+    }
 
     // --- Market Status ---
     function loadMarketStatus() {
@@ -1312,18 +1359,56 @@
                         </div>
                     </div>
 
-                    <div class="card">
-                        <div class="card-header"><i class="fas fa-trophy text-warning"></i> Leaderboard</div>
-                        <div class="card-body p-0">
-                            <table class="table table-striped mb-0" id="leaderboard-table">
-                                <thead><tr><th>Rank</th><th>User</th><th>Total Equity</th><th>Started</th></tr></thead>
-                                <tbody><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody>
-                            </table>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header"><i class="fas fa-trophy text-warning"></i> Leaderboard</div>
+                                <div class="card-body p-0">
+                                    <table class="table table-striped mb-0" id="leaderboard-table">
+                                        <thead><tr><th>Rank</th><th>User</th><th>Total Equity</th></tr></thead>
+                                        <tbody><tr><td colspan="3" class="text-center">Loading...</td></tr></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header"><i class="fas fa-medal text-info"></i> Your Badges</div>
+                                <div class="card-body" id="badges-container">
+                                    <div class="text-center">Loading badges...</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
 
                 loadLeaderboard();
+                loadBadges();
+            });
+    }
+
+    function loadBadges() {
+        const container = document.getElementById('badges-container');
+        fetch(`${API_BASE_URL}/api/achievements`)
+            .then(res => res.json())
+            .then(data => {
+                container.innerHTML = '';
+                if(data.length > 0) {
+                    data.forEach(badge => {
+                        const opacity = badge.earned ? '1' : '0.4';
+                        const grayscale = badge.earned ? '' : 'filter: grayscale(100%);';
+                        const title = badge.earned ? `Earned on ${badge.date}` : badge.description;
+
+                        container.innerHTML += `
+                            <div class="d-inline-block text-center m-2" style="opacity: ${opacity}; ${grayscale}" title="${title}">
+                                <div class="fs-1 text-warning"><i class="fas fa-certificate"></i></div>
+                                <small>${badge.name}</small>
+                            </div>
+                        `;
+                    });
+                } else {
+                    container.innerHTML = 'No badges system loaded.';
+                }
             });
     }
 
