@@ -24,6 +24,7 @@ from market_data import get_market_status
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -363,7 +364,8 @@ def api_new_listings():
 @app.route('/api/ai-analysis/<ticker>')
 @login_required
 def api_ai_analysis(ticker):
-    analysis = get_stock_analysis(ticker)
+    is_beta = getattr(current_user, 'beta_active', False)
+    analysis = get_stock_analysis(ticker, include_forecast=is_beta)
     if not analysis:
         return jsonify({'error': 'Could not generate analysis'}), 404
     return jsonify(analysis)
@@ -461,6 +463,47 @@ def api_sp500_predictions():
 
     predictions = get_sp500_predictions()
     return jsonify(predictions)
+
+@app.route('/api/beta/signals')
+@login_required
+def api_beta_signals():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    signals = get_smart_signals()
+    return jsonify(signals)
+
+@app.route('/api/beta/alerts', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def api_beta_alerts():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    if request.method == 'GET':
+        alerts = get_user_alerts(current_user.id)
+        # Check for triggered updates while we are here
+        triggered = check_user_alerts(current_user.id)
+        # If triggered found, frontend could notify, but for now just returning list
+        # Convert decimals
+        for a in alerts:
+            a['target_price'] = float(a['target_price'])
+        return jsonify({'alerts': alerts, 'triggered': triggered})
+
+    data = request.get_json()
+    if request.method == 'POST':
+        ticker = data.get('ticker')
+        price = data.get('price')
+        condition = data.get('condition') # ABOVE or BELOW
+        if not all([ticker, price, condition]):
+            return jsonify({'status': 'error', 'message': 'Missing fields'}), 400
+
+        success = create_price_alert(current_user.id, ticker, price, condition)
+        return jsonify({'status': 'success' if success else 'error'})
+
+    elif request.method == 'DELETE':
+        alert_id = data.get('alert_id')
+        success = delete_price_alert(alert_id, current_user.id)
+        return jsonify({'status': 'success' if success else 'error'})
 
 @app.route('/api/market-status')
 def api_market_status():

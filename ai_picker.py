@@ -184,7 +184,7 @@ def get_latest_news(ticker):
         logging.error(f"Error fetching news for {ticker}: {e}")
         return []
 
-def get_stock_analysis(ticker):
+def get_stock_analysis(ticker, include_forecast=False):
     """
     Returns a detailed analysis breakdown for a ticker.
     """
@@ -214,18 +214,20 @@ def get_stock_analysis(ticker):
         sentiment_scores = get_news_sentiment([ticker])
         sentiment_val = sentiment_scores.get(ticker, 0)
 
-        # Price Prediction (Simple Linear Regression over last 30 days)
-        try:
-            last_30 = hist['Close'].iloc[-30:]
-            x = np.arange(len(last_30))
-            y = last_30.values
-            slope, intercept = np.polyfit(x, y, 1)
-            # Predict 7 days out
-            prediction_7d = slope * (len(last_30) + 7) + intercept
-            prediction_pct = ((prediction_7d - current_price) / current_price) * 100
-        except Exception as e:
-            prediction_7d = 0
-            prediction_pct = 0
+        prediction_7d = 0
+        prediction_pct = 0
+        if include_forecast:
+            # Price Prediction (Simple Linear Regression over last 30 days)
+            try:
+                last_30 = hist['Close'].iloc[-30:]
+                x = np.arange(len(last_30))
+                y = last_30.values
+                slope, intercept = np.polyfit(x, y, 1)
+                # Predict 7 days out
+                prediction_7d = slope * (len(last_30) + 7) + intercept
+                prediction_pct = ((prediction_7d - current_price) / current_price) * 100
+            except Exception as e:
+                pass
 
         # Generate Text Summary
         summary = f"Analysis for {ticker}:\n"
@@ -236,8 +238,11 @@ def get_stock_analysis(ticker):
         summary += f"- RSI: {rsi:.2f} ({'Oversold' if rsi < 30 else 'Overbought' if rsi > 70 else 'Neutral'}).\n"
         summary += f"- MACD: {'Bullish' if macd_val > signal_val else 'Bearish'} trend.\n"
         summary += f"- Sentiment: Score is {sentiment_val:.2f}.\n"
-        if prediction_7d > 0:
+
+        if include_forecast and prediction_7d > 0:
             summary += f"- AI Forecast: Predicted price in 7 days is ${prediction_7d:.2f} ({prediction_pct:+.2f}%)."
+        elif not include_forecast:
+            summary += "- AI Forecast: [LOCKED] Upgrade to Beta to view prediction."
 
         # Normalize scores for radar chart (0-100 scale approximation)
         metrics = {
