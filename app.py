@@ -23,6 +23,7 @@ from ai_prediction import get_sp500_predictions
 from market_data import get_market_status
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
+from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -523,6 +524,50 @@ def api_export_history():
         mimetype="text/csv",
         headers={"Content-disposition": "attachment; filename=transactions.csv"}
     )
+
+@app.route('/api/personal/portfolio', methods=['GET', 'POST'])
+@login_required
+def api_personal_portfolio():
+    if request.method == 'POST':
+        success, message = create_portfolio(current_user.id)
+        if success:
+            return jsonify({'status': 'success', 'message': message})
+        else:
+            return jsonify({'status': 'error', 'message': message}), 400
+
+    status = get_portfolio_status(current_user.id)
+    if not status:
+        # Not created yet
+        return jsonify({'status': 'not_found'})
+    return jsonify(status)
+
+@app.route('/api/personal/trade', methods=['POST'])
+@login_required
+def api_personal_trade():
+    data = request.get_json()
+    ticker = data.get('ticker')
+    action = data.get('action') # BUY or SELL
+    amount = data.get('amount') # $ for BUY, Shares for SELL
+
+    if not all([ticker, action, amount]):
+        return jsonify({'status': 'error', 'message': 'Missing fields'}), 400
+
+    success, message = execute_user_trade(current_user.id, ticker, action, amount)
+    if success:
+        return jsonify({'status': 'success', 'message': message})
+    else:
+        return jsonify({'status': 'error', 'message': message}), 400
+
+@app.route('/api/leaderboard')
+@login_required
+def api_leaderboard():
+    data = get_leaderboard()
+    # Convert dates
+    for row in data:
+        row['start_date'] = row['start_date'].strftime('%Y-%m-%d')
+        row['total_equity'] = float(row['total_equity'])
+        row['cash_balance'] = float(row.get('cash_balance', 0)) # Might not be selected if I removed it from query, let's check personal_portfolio.py
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

@@ -99,6 +99,9 @@
             </li>
             {% endif %}
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="simulator-tab" data-bs-toggle="tab" data-bs-target="#simulator" type="button" role="tab"><i class="fas fa-gamepad"></i> Simulator</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="backtesting-tab" data-bs-toggle="tab" data-bs-target="#backtesting" type="button" role="tab">Backtesting</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -199,6 +202,17 @@
                 </div>
             </div>
             {% endif %}
+
+            <!-- Simulator Tab -->
+            <div class="tab-pane fade" id="simulator" role="tabpanel">
+                <div id="simulator-content">
+                    <div class="text-center py-5">
+                        <h3><i class="fas fa-wallet"></i> Paper Trading Simulator</h3>
+                        <p class="lead">Start with $10,000 virtual cash and test your strategies risk-free.</p>
+                        <button class="btn btn-lg btn-success" onclick="startSimulator()">Start Trading</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- New Listings Tab -->
             <div class="tab-pane fade" id="new-listings" role="tabpanel">
@@ -1042,6 +1056,174 @@
                 console.error(err);
             });
     }
+
+    // --- Simulator ---
+    function startSimulator() {
+        fetch(`${API_BASE_URL}/api/personal/portfolio`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success') loadSimulator();
+                else alert(data.message);
+            });
+    }
+
+    function loadSimulator() {
+        const content = document.getElementById('simulator-content');
+        fetch(`${API_BASE_URL}/api/personal/portfolio`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'not_found') {
+                    // Already handled by default view
+                    return;
+                }
+
+                const holdingsRows = data.holdings && data.holdings.length > 0
+                    ? data.holdings.map(h => `
+                        <tr>
+                            <td>${createTickerLink(h.ticker)}</td>
+                            <td>${h.shares.toFixed(4)}</td>
+                            <td>$${h.avg_cost.toFixed(2)}</td>
+                            <td>$${h.current_price.toFixed(2)}</td>
+                            <td class="${h.return_pct >= 0 ? 'text-success' : 'text-danger'}">${h.return_pct.toFixed(2)}%</td>
+                            <td>$${h.value.toFixed(2)}</td>
+                            <td><button class="btn btn-xs btn-outline-danger" onclick="tradeSimulator('${h.ticker}', 'SELL')">Sell</button></td>
+                        </tr>`).join('')
+                    : '<tr><td colspan="7" class="text-center">No holdings. Buy some stocks!</td></tr>';
+
+                content.innerHTML = `
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Cash Balance</h6>
+                                    <h3>$${data.cash.toFixed(2)}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Net Worth</h6>
+                                    <h3 class="${data.total_return_pct >= 0 ? 'text-success' : 'text-danger'}">$${data.net_worth.toFixed(2)}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="text-muted">Total Return</h6>
+                                    <h3 class="${data.total_return_pct >= 0 ? 'text-success' : 'text-danger'}">${data.total_return_pct >= 0 ? '+' : ''}${data.total_return_pct.toFixed(2)}%</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="card h-100">
+                                <div class="card-header">Your Holdings</div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover small mb-0">
+                                        <thead><tr><th>Ticker</th><th>Shares</th><th>Avg Cost</th><th>Price</th><th>Return</th><th>Value</th><th>Action</th></tr></thead>
+                                        <tbody>${holdingsRows}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-header">Trade</div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label>Ticker</label>
+                                        <input type="text" id="sim-ticker" class="form-control" placeholder="e.g. AAPL">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label>Action</label>
+                                        <select id="sim-action" class="form-select">
+                                            <option value="BUY">Buy ($ Amount)</option>
+                                            <option value="SELL">Sell (Shares)</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label>Amount</label>
+                                        <input type="number" id="sim-amount" class="form-control" placeholder="Amount">
+                                    </div>
+                                    <button class="btn btn-primary w-100" onclick="executeTrade()">Submit Trade</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header"><i class="fas fa-trophy text-warning"></i> Leaderboard</div>
+                        <div class="card-body p-0">
+                            <table class="table table-striped mb-0" id="leaderboard-table">
+                                <thead><tr><th>Rank</th><th>User</th><th>Total Equity</th><th>Started</th></tr></thead>
+                                <tbody><tr><td colspan="4" class="text-center">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                loadLeaderboard();
+            });
+    }
+
+    function tradeSimulator(ticker, action) {
+        document.getElementById('sim-ticker').value = ticker;
+        document.getElementById('sim-action').value = action;
+        document.getElementById('sim-amount').focus();
+    }
+
+    function executeTrade() {
+        const ticker = document.getElementById('sim-ticker').value.toUpperCase();
+        const action = document.getElementById('sim-action').value;
+        const amount = document.getElementById('sim-amount').value;
+
+        if(!ticker || !amount) return alert("Please fill all fields");
+
+        fetch(`${API_BASE_URL}/api/personal/trade`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker, action, amount })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message);
+            if(data.status === 'success') {
+                loadSimulator();
+                document.getElementById('sim-amount').value = '';
+            }
+        });
+    }
+
+    function loadLeaderboard() {
+        fetch(`${API_BASE_URL}/api/leaderboard`)
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('leaderboard-table').querySelector('tbody');
+                tbody.innerHTML = '';
+                if(data.length > 0) {
+                    data.forEach((row, index) => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${row.username}</td>
+                                <td>$${row.total_equity.toFixed(2)}</td>
+                                <td>${row.start_date}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">No active traders.</td></tr>';
+                }
+            });
+    }
+
+    document.getElementById('simulator-tab').addEventListener('shown.bs.tab', function (e) {
+        loadSimulator();
+    });
 
     // --- Watchlist ---
     function refreshWatchlist() {
