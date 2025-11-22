@@ -22,6 +22,7 @@ from ai_picker import get_ai_recommendation, get_stock_analysis, get_latest_news
 from ai_prediction import get_sp500_predictions
 from market_data import get_market_status
 from backtesting import run_backtest
+from ai_assistant import process_chat_message
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -490,6 +491,17 @@ def api_allocation():
             'value': float(row['total_invested']) + float(row['cash_balance'])
         })
     return jsonify(result)
+
+@app.route('/api/chat', methods=['POST'])
+@login_required
+def api_chat():
+    data = request.get_json()
+    message = data.get('message')
+    if not message:
+        return jsonify({'response': "Please say something."})
+
+    response = process_chat_message(current_user.id, message)
+    return jsonify({'response': response})
 
 @app.route('/api/export-history')
 @login_required

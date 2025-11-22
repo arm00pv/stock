@@ -1102,5 +1102,67 @@
             }
         });
     }
+    // --- AI Chat Assistant ---
+    function toggleChat() {
+        const chatWindow = document.getElementById('chat-window');
+        if (chatWindow.style.display === 'none' || chatWindow.style.display === '') {
+            chatWindow.style.display = 'flex';
+            document.getElementById('chat-input').focus();
+        } else {
+            chatWindow.style.display = 'none';
+        }
+    }
+
+    function sendChatMessage() {
+        const input = document.getElementById('chat-input');
+        const message = input.value.trim();
+        if (!message) return;
+
+        const messagesDiv = document.getElementById('chat-messages');
+        messagesDiv.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block" style="max-width: 80%;">${message}</span></div>`;
+        input.value = '';
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+        fetch(`${API_BASE_URL}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        })
+        .then(res => res.json())
+        .then(data => {
+            messagesDiv.innerHTML += `<div class="text-start mb-2"><span class="bg-light text-dark p-2 rounded d-inline-block border" style="max-width: 80%;">${data.response}</span></div>`;
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        })
+        .catch(err => {
+            messagesDiv.innerHTML += `<div class="text-start mb-2"><span class="bg-danger text-white p-2 rounded">Error connecting to AI.</span></div>`;
+        });
+    }
+
+    document.getElementById('chat-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') sendChatMessage();
+    });
 </script>
+
+<!-- AI Chat Interface -->
+<div id="chat-window" class="card shadow" style="position: fixed; bottom: 80px; right: 20px; width: 350px; height: 450px; display: none; z-index: 2000; flex-direction: column;">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-robot"></i> AI Assistant</strong>
+        <button type="button" class="btn-close btn-close-white" onclick="toggleChat()"></button>
+    </div>
+    <div class="card-body overflow-auto" id="chat-messages" style="flex: 1; background: #f8f9fa;">
+        <div class="text-start mb-2">
+            <span class="bg-light text-dark p-2 rounded d-inline-block border">Hello! Ask me about stock prices, analysis, or your portfolio.</span>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="input-group">
+            <input type="text" id="chat-input" class="form-control" placeholder="Type a message...">
+            <button class="btn btn-primary" onclick="sendChatMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+</div>
+
+<button class="btn btn-primary rounded-circle shadow-lg" onclick="toggleChat()" style="position: fixed; bottom: 20px; right: 20px; width: 50px; height: 50px; z-index: 2000;">
+    <i class="fas fa-comment-dots fa-lg"></i>
+</button>
 {% endblock %}
