@@ -172,7 +172,12 @@
             <div class="tab-pane fade" id="watchlist" role="tabpanel">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3>My Watchlist</h3>
-                    <button class="btn btn-primary btn-sm" onclick="refreshWatchlist()"><i class="fas fa-sync"></i> Refresh</button>
+                    <div>
+                        {% if current_user.beta_active %}
+                        <button class="btn btn-outline-info btn-sm me-1" onclick="showCorrelationModal()"><i class="fas fa-th"></i> Correlation</button>
+                        {% endif %}
+                        <button class="btn btn-primary btn-sm" onclick="refreshWatchlist()"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover" id="watchlist-table">
@@ -555,6 +560,23 @@
                 </thead>
                 <tbody></tbody>
             </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Correlation Modal -->
+<div class="modal fade" id="correlationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Watchlist Correlation Matrix</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="correlation-container" class="table-responsive">
+            <div class="text-center">Loading...</div>
         </div>
       </div>
     </div>
@@ -1259,6 +1281,60 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ alert_id: id })
         }).then(() => loadAlerts());
+    }
+
+    // --- Correlation Matrix ---
+    function showCorrelationModal() {
+        const modal = new bootstrap.Modal(document.getElementById('correlationModal'));
+        modal.show();
+
+        // Get tickers from watchlist table
+        // This is a bit hacky, better to fetch from API if possible, but let's use DOM for now or re-fetch
+        // Re-fetching is cleaner.
+
+        fetch(`${API_BASE_URL}/api/watchlist`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.length < 2) {
+                    document.getElementById('correlation-container').innerHTML = '<div class="alert alert-warning">Need at least 2 stocks in watchlist to calculate correlation.</div>';
+                    return;
+                }
+
+                const tickers = data.map(item => item.ticker);
+
+                fetch(`${API_BASE_URL}/api/beta/correlation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: tickers })
+                })
+                .then(res => res.json())
+                .then(matrixData => {
+                    if(!matrixData.matrix) {
+                        document.getElementById('correlation-container').innerHTML = '<div class="alert alert-danger">Failed to load matrix.</div>';
+                        return;
+                    }
+
+                    let html = '<table class="table table-bordered text-center table-sm"><thead><tr><th></th>';
+                    matrixData.tickers.forEach(t => html += `<th>${t}</th>`);
+                    html += '</tr></thead><tbody>';
+
+                    matrixData.matrix.forEach((row, i) => {
+                        html += `<tr><th>${matrixData.tickers[i]}</th>`;
+                        row.forEach(val => {
+                            // Color coding
+                            let bg = '';
+                            if(val === 1) bg = '#eee';
+                            else if(val > 0.7) bg = '#d1e7dd'; // High pos
+                            else if(val < -0.7) bg = '#f8d7da'; // High neg
+                            html += `<td style="background-color: ${bg}">${val.toFixed(2)}</td>`;
+                        });
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table>';
+
+                    document.getElementById('correlation-container').innerHTML = html;
+                });
+            });
     }
 
     // --- Simulator ---

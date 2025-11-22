@@ -79,6 +79,55 @@ def init_db():
         )
     """)
 
+    # Personal Portfolio Tables
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_portfolios (
+            user_id INT PRIMARY KEY,
+            cash_balance DECIMAL(18, 4) DEFAULT 10000.00,
+            total_invested DECIMAL(18, 4) DEFAULT 0.00,
+            start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            ticker VARCHAR(20) NOT NULL,
+            action VARCHAR(10) NOT NULL,
+            shares DECIMAL(18, 8) NOT NULL,
+            price DECIMAL(18, 4) NOT NULL,
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    # Beta & Gamification Tables
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS price_alerts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            ticker VARCHAR(20) NOT NULL,
+            target_price DECIMAL(18, 4) NOT NULL,
+            condition_type VARCHAR(10) NOT NULL,
+            is_triggered BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            badge_name VARCHAR(50) NOT NULL,
+            earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_badge (user_id, badge_name),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # AI Settings Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ai_decision_log (

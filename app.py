@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix
 from gamification import get_user_badges, check_and_award_badges
 from decimal import Decimal
 from models import User
@@ -505,6 +505,23 @@ def api_beta_alerts():
         alert_id = data.get('alert_id')
         success = delete_price_alert(alert_id, current_user.id)
         return jsonify({'status': 'success' if success else 'error'})
+
+@app.route('/api/beta/correlation', methods=['POST'])
+@login_required
+def api_beta_correlation():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    # Clean tickers
+    tickers = [t.upper().strip() for t in tickers if t]
+
+    if len(tickers) < 2:
+        return jsonify({'error': 'At least 2 valid tickers required.'}), 400
+
+    result = get_correlation_matrix(tickers)
+    return jsonify(result)
 
 @app.route('/api/market-status')
 def api_market_status():

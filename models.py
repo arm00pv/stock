@@ -41,5 +41,13 @@ def init_user_db():
                 beta_active BOOLEAN DEFAULT FALSE
             )
         """)
+        # Ensure columns exist for existing installations (minimal migration check)
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN email VARCHAR(120) UNIQUE")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN beta_active BOOLEAN DEFAULT FALSE")
+        except: pass
+
     conn.commit()
     conn.close()

@@ -206,6 +206,22 @@ def get_stock_analysis(ticker, include_forecast=False):
         volatility = returns.std() * (252**0.5)
         volatility_score = 25 - (volatility * 50)
 
+        # Advanced Metrics (Beta only)
+        sharpe_ratio = 0
+        max_drawdown = 0
+        if include_forecast:
+            # Sharpe Ratio (assuming risk-free rate 0 for simplicity or 4%)
+            rf = 0.04
+            excess_returns = returns - (rf / 252)
+            if volatility > 0:
+                sharpe_ratio = (excess_returns.mean() * 252) / volatility
+
+            # Max Drawdown
+            cumulative = (1 + returns).cumprod()
+            peak = cumulative.cummax()
+            drawdown = (cumulative - peak) / peak
+            max_drawdown = drawdown.min() * 100
+
         rsi = calculate_rsi(hist['Close']).iloc[-1]
         macd, signal = calculate_macd(hist['Close'])
         macd_val = macd.iloc[-1]
@@ -239,10 +255,12 @@ def get_stock_analysis(ticker, include_forecast=False):
         summary += f"- MACD: {'Bullish' if macd_val > signal_val else 'Bearish'} trend.\n"
         summary += f"- Sentiment: Score is {sentiment_val:.2f}.\n"
 
-        if include_forecast and prediction_7d > 0:
-            summary += f"- AI Forecast: Predicted price in 7 days is ${prediction_7d:.2f} ({prediction_pct:+.2f}%)."
+        if include_forecast:
+            if prediction_7d > 0:
+                summary += f"- AI Forecast: Predicted price in 7 days is ${prediction_7d:.2f} ({prediction_pct:+.2f}%).\n"
+            summary += f"- Advanced Metrics: Sharpe Ratio {sharpe_ratio:.2f}, Max Drawdown {max_drawdown:.2f}%."
         elif not include_forecast:
-            summary += "- AI Forecast: [LOCKED] Upgrade to Beta to view prediction."
+            summary += "- AI Forecast & Advanced Metrics: [LOCKED] Upgrade to Beta to view."
 
         # Normalize scores for radar chart (0-100 scale approximation)
         metrics = {
