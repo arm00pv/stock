@@ -14,9 +14,10 @@ from database import (
     init_db, get_portfolio_summary, get_portfolio_holdings,
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
-    get_ai_performance_data, search_stocks_db, get_new_listings
+    get_ai_performance_data, search_stocks_db, get_new_listings,
+    get_watchlist, add_to_watchlist, remove_from_watchlist
 )
-from ai_picker import get_ai_recommendation, get_stock_analysis
+from ai_picker import get_ai_recommendation, get_stock_analysis, get_latest_news
 from backtesting import run_backtest
 from decimal import Decimal
 from models import User
@@ -349,6 +350,54 @@ def api_ai_analysis(ticker):
 def api_audit_portfolio(portfolio_name):
     report = audit_portfolio(portfolio_name)
     return jsonify(report)
+
+@app.route('/api/watchlist', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def api_watchlist():
+    if request.method == 'GET':
+        watchlist = get_watchlist(current_user.id)
+        # Enhance with current price
+        if watchlist:
+            tickers = [item['ticker'] for item in watchlist]
+            try:
+                # Only download if tickers list is not empty
+                # yf.download returns DataFrame or Series depending on input
+                data = yf.download(tickers, period='1d', progress=False)
+                close_data = data['Close']
+                prices = {}
+                if not close_data.empty:
+                    if len(tickers) > 1:
+                        prices = close_data.iloc[-1].to_dict()
+                    else:
+                        prices = {tickers[0]: close_data.iloc[-1]}
+
+                for item in watchlist:
+                    item['current_price'] = prices.get(item['ticker'], 0)
+                    # convert timestamps to string
+                    item['date_added'] = item['date_added'].strftime('%Y-%m-%d')
+            except Exception as e:
+                print(f"Error fetching watchlist prices: {e}")
+
+        return jsonify(watchlist)
+
+    data = request.get_json()
+    ticker = data.get('ticker')
+    if not ticker:
+        return jsonify({'error': 'Ticker is required'}), 400
+
+    if request.method == 'POST':
+        success = add_to_watchlist(current_user.id, ticker)
+        return jsonify({'status': 'success' if success else 'error'})
+
+    elif request.method == 'DELETE':
+        success = remove_from_watchlist(current_user.id, ticker)
+        return jsonify({'status': 'success' if success else 'error'})
+
+@app.route('/api/news/<ticker>')
+@login_required
+def api_stock_news(ticker):
+    news = get_latest_news(ticker)
+    return jsonify(news)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)

@@ -161,6 +161,29 @@ def get_ai_recommendation_score(category, ticker):
     _, score = get_ai_recommendation(category, [ticker], return_score=True)
     return score
 
+def get_latest_news(ticker):
+    """
+    Fetches the latest news for a ticker from Marketaux.
+    """
+    api_token = os.environ.get('MARKETAUX_API_KEY')
+    if not api_token:
+        return []
+
+    try:
+        params = {
+            'api_token': api_token,
+            'symbols': ticker,
+            'limit': 5,
+            'language': 'en',
+        }
+        response = requests.get("https://api.marketaux.com/v1/news/all", params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('data', [])
+    except Exception as e:
+        logging.error(f"Error fetching news for {ticker}: {e}")
+        return []
+
 def get_stock_analysis(ticker):
     """
     Returns a detailed analysis breakdown for a ticker.

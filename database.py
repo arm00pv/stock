@@ -67,6 +67,18 @@ def init_db():
         )
     """)
 
+    # Watchlist Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS watchlist (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            ticker VARCHAR(20) NOT NULL,
+            date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_watchlist (user_id, ticker),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # AI Settings Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ai_decision_log (
@@ -142,6 +154,50 @@ def save_ai_settings(category, weights):
     finally:
         cursor.close()
         conn.close()
+
+def get_watchlist(user_id):
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM watchlist WHERE user_id = %s ORDER BY date_added DESC", (user_id,))
+            return cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching watchlist: {err}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+def add_to_watchlist(user_id, ticker):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT IGNORE INTO watchlist (user_id, ticker) VALUES (%s, %s)", (user_id, ticker))
+            conn.commit()
+            return True
+    except mysql.connector.Error as err:
+        print(f"Error adding to watchlist: {err}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+def remove_from_watchlist(user_id, ticker):
+    conn = get_db_connection()
+    if not conn: return False
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM watchlist WHERE user_id = %s AND ticker = %s", (user_id, ticker))
+            conn.commit()
+            return True
+    except mysql.connector.Error as err:
+        print(f"Error removing from watchlist: {err}")
+        return False
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
 
 def search_stocks_db(query):
     conn = get_db_connection()

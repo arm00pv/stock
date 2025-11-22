@@ -75,6 +75,9 @@
                 <button class="nav-link active" id="portfolios-tab" data-bs-toggle="tab" data-bs-target="#portfolios" type="button" role="tab">Portfolios</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="watchlist-tab" data-bs-toggle="tab" data-bs-target="#watchlist" type="button" role="tab">Watchlist</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="screener-tab" data-bs-toggle="tab" data-bs-target="#screener" type="button" role="tab">Stock Screener</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -96,6 +99,29 @@
                 <div class="row" id="portfolios-container">
                     <!-- Portfolio cards will be injected here -->
                     <div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div></div>
+                </div>
+            </div>
+
+            <!-- Watchlist Tab -->
+            <div class="tab-pane fade" id="watchlist" role="tabpanel">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3>My Watchlist</h3>
+                    <button class="btn btn-primary btn-sm" onclick="refreshWatchlist()"><i class="fas fa-sync"></i> Refresh</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="watchlist-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Price</th>
+                                <th>Added On</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="4" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -618,6 +644,12 @@
         const modal = new bootstrap.Modal(document.getElementById('analysisModal'));
         document.getElementById('analysisModalTitle').innerText = `AI Analysis: ${ticker}`;
         document.getElementById('analysisText').innerHTML = '<div class="spinner-border text-primary"></div> Analyzing...';
+        document.getElementById('analysisNews').innerHTML = '<div class="spinner-border text-primary spinner-border-sm"></div> Loading news...';
+
+        // Setup Add to Watchlist button
+        const wlBtn = document.getElementById('analysis-add-watchlist');
+        wlBtn.onclick = () => addToWatchlist(ticker);
+
         modal.show();
 
         fetch(`${API_BASE_URL}/api/ai-analysis/${ticker}`)
@@ -662,6 +694,30 @@
                 document.getElementById('analysisText').innerText = "Failed to load analysis.";
                 console.error(err);
             });
+
+        // Fetch News
+        fetch(`${API_BASE_URL}/api/news/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                const newsContainer = document.getElementById('analysisNews');
+                newsContainer.innerHTML = '';
+                if(data.length > 0) {
+                    data.forEach(article => {
+                        const date = new Date(article.published_at).toLocaleDateString();
+                        newsContainer.innerHTML += `
+                            <a href="${article.url}" target="_blank" class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1 text-truncate" title="${article.title}">${article.title}</h6>
+                                    <small class="text-muted">${date}</small>
+                                </div>
+                                <small class="text-muted">${article.source}</small>
+                            </a>
+                        `;
+                    });
+                } else {
+                    newsContainer.innerHTML = '<div class="list-group-item">No recent news found.</div>';
+                }
+            });
     }
 
     // --- New Listings ---
@@ -702,6 +758,70 @@
         document.getElementById('new-listings-tab').addEventListener('shown.bs.tab', function (e) {
             loadNewListings();
         });
+
+        document.getElementById('watchlist-tab').addEventListener('shown.bs.tab', function (e) {
+            refreshWatchlist();
+        });
     });
+
+    // --- Watchlist ---
+    function refreshWatchlist() {
+        const tbody = document.getElementById('watchlist-table').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center"><div class="spinner-border text-primary"></div></td></tr>';
+
+        fetch(`${API_BASE_URL}/api/watchlist`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${createTickerLink(item.ticker)}</td>
+                                <td>$${item.current_price ? item.current_price.toFixed(2) : 'N/A'}</td>
+                                <td>${item.date_added}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-secondary me-1" onclick="showAnalysis('${item.ticker}')">Analysis</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removeFromWatchlist('${item.ticker}')"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center">Your watchlist is empty.</td></tr>';
+                }
+            });
+    }
+
+    function addToWatchlist(ticker) {
+        fetch(`${API_BASE_URL}/api/watchlist`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker: ticker })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                alert(`${ticker} added to watchlist.`);
+            } else {
+                alert('Failed to add to watchlist.');
+            }
+        });
+    }
+
+    function removeFromWatchlist(ticker) {
+        if(!confirm(`Remove ${ticker} from watchlist?`)) return;
+        fetch(`${API_BASE_URL}/api/watchlist`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker: ticker })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                refreshWatchlist();
+            }
+        });
+    }
 </script>
 {% endblock %}
