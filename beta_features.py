@@ -3,6 +3,7 @@ import pandas as pd
 import logging
 from database import get_db_connection
 from sp500_list import SP500_TICKERS
+from notifications import create_notification
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -204,6 +205,8 @@ def check_user_alerts(user_id):
                     })
                     # Mark triggered
                     cursor.execute("UPDATE price_alerts SET is_triggered = TRUE WHERE id = %s", (alert['id'],))
+                    # Notify
+                    create_notification(user_id, f"Price Alert: {ticker} is {alert['condition_type']} {target:.2f} (Current: {price:.2f})", "warning")
 
             conn.commit()
             return triggered

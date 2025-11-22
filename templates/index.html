@@ -117,6 +117,9 @@
                 <button class="nav-link" id="backtesting-tab" data-bs-toggle="tab" data-bs-target="#backtesting" type="button" role="tab">Backtesting</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="learning-tab" data-bs-toggle="tab" data-bs-target="#learning" type="button" role="tab">Learning Center</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">AI Settings</button>
             </li>
         </ul>
@@ -383,6 +386,39 @@
                 </div>
             </div>
 
+            <!-- Learning Tab -->
+            <div class="tab-pane fade" id="learning" role="tabpanel">
+                <h3 class="mb-3"><i class="fas fa-graduation-cap text-info"></i> Learning Center</h3>
+                <div class="accordion" id="learningAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingOne">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                                What are Technical Indicators?
+                            </button>
+                        </h2>
+                        <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#learningAccordion">
+                            <div class="accordion-body">
+                                <strong>RSI (Relative Strength Index):</strong> Measures the speed and change of price movements. RSI > 70 is overbought (sell signal), RSI < 30 is oversold (buy signal).<br><br>
+                                <strong>MACD (Moving Average Convergence Divergence):</strong> A trend-following momentum indicator. When the MACD line crosses above the signal line, it's a bullish (buy) signal.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingTwo">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                                Understanding Sharpe Ratio & Drawdown
+                            </button>
+                        </h2>
+                        <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#learningAccordion">
+                            <div class="accordion-body">
+                                <strong>Sharpe Ratio:</strong> A measure of risk-adjusted return. Higher is better. A ratio > 1 is good, > 2 is very good.<br><br>
+                                <strong>Max Drawdown:</strong> The maximum observed loss from a peak to a trough of a portfolio. Lower is better.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Settings Tab -->
             <div class="tab-pane fade" id="settings" role="tabpanel">
                 <div class="card mb-4 border-warning">
@@ -560,6 +596,33 @@
                 </thead>
                 <tbody></tbody>
             </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Public Profile Modal -->
+<div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="profileModalTitle">User Profile</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div id="profile-loading" class="spinner-border text-primary"></div>
+        <div id="profile-content" style="display: none;">
+            <h3 id="profile-username"></h3>
+            <span id="profile-beta-badge" class="badge bg-warning text-dark mb-3" style="display: none;">Beta User</span>
+            <div class="row text-start">
+                <div class="col-6"><strong>Member Since:</strong> <span id="profile-since"></span></div>
+                <div class="col-6"><strong>Total Equity:</strong> <span id="profile-equity" class="text-success"></span></div>
+                <div class="col-12 mt-2"><strong>Best Trade:</strong> <span id="profile-best"></span></div>
+            </div>
+            <hr>
+            <h5>Badges</h5>
+            <div id="profile-badges"></div>
         </div>
       </div>
     </div>
@@ -1283,6 +1346,43 @@
         }).then(() => loadAlerts());
     }
 
+    // --- Public Profile ---
+    function showPublicProfile(username) {
+        const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+        document.getElementById('profile-loading').style.display = 'inline-block';
+        document.getElementById('profile-content').style.display = 'none';
+        modal.show();
+
+        fetch(`${API_BASE_URL}/api/profile/${username}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    alert(data.error);
+                    modal.hide();
+                    return;
+                }
+
+                document.getElementById('profile-username').innerText = data.username;
+                document.getElementById('profile-beta-badge').style.display = data.is_beta ? 'inline-block' : 'none';
+                document.getElementById('profile-since').innerText = data.member_since;
+                document.getElementById('profile-equity').innerText = '$' + data.total_equity.toFixed(2);
+                document.getElementById('profile-best').innerText = data.top_trade;
+
+                const badgesDiv = document.getElementById('profile-badges');
+                badgesDiv.innerHTML = '';
+                if(data.badges.length > 0) {
+                    data.badges.forEach(b => {
+                        badgesDiv.innerHTML += `<span class="badge bg-info text-dark m-1" title="${b.description}"><i class="fas fa-certificate"></i> ${b.name}</span>`;
+                    });
+                } else {
+                    badgesDiv.innerHTML = '<small class="text-muted">No badges yet.</small>';
+                }
+
+                document.getElementById('profile-loading').style.display = 'none';
+                document.getElementById('profile-content').style.display = 'block';
+            });
+    }
+
     // --- Correlation Matrix ---
     function showCorrelationModal() {
         const modal = new bootstrap.Modal(document.getElementById('correlationModal'));
@@ -1527,7 +1627,7 @@
                         tbody.innerHTML += `
                             <tr>
                                 <td>${index + 1}</td>
-                                <td>${row.username}</td>
+                                <td><a href="#" onclick="showPublicProfile('${row.username}'); return false;">${row.username}</a></td>
                                 <td>$${row.total_equity.toFixed(2)}</td>
                                 <td>${row.start_date}</td>
                             </tr>

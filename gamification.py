@@ -1,5 +1,6 @@
 from database import get_db_connection
 import logging
+from notifications import create_notification
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -42,6 +43,7 @@ def award_badge(user_id, badge_name):
             if cursor.rowcount > 0:
                 conn.commit()
                 logging.info(f"Awarded badge {badge_name} to user {user_id}")
+                create_notification(user_id, f"Achievement Unlocked: {badge_name}!", "success")
                 return True
     except Exception as e:
         logging.error(f"Error awarding badge: {e}")

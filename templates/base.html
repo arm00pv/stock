@@ -40,6 +40,16 @@
                         <button class="btn btn-link nav-link" id="darkModeToggle"><i class="fas fa-moon"></i></button>
                     </li>
                     {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown me-2">
+                        <a class="nav-link dropdown-toggle" href="#" id="notifDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-bell"></i> <span id="notif-badge" class="badge bg-danger rounded-pill" style="display: none;">0</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notifDropdown" id="notif-list" style="width: 300px; max-height: 400px; overflow-y: auto;">
+                            <li><h6 class="dropdown-header">Notifications</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-center small text-muted" href="#">No new notifications</a></li>
+                        </ul>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">Dashboard</a>
                     </li>
@@ -155,6 +165,52 @@
                 toggleBtn.innerHTML = '<i class="fas fa-sun"></i>';
             }
         });
+
+        // Notification Polling
+        {% if current_user.is_authenticated %}
+        function checkNotifications() {
+            fetch('/api/notifications')
+                .then(res => res.json())
+                .then(data => {
+                    const badge = document.getElementById('notif-badge');
+                    const list = document.getElementById('notif-list');
+
+                    if (data.length > 0) {
+                        badge.innerText = data.length;
+                        badge.style.display = 'inline-block';
+
+                        let html = '<li><h6 class="dropdown-header">Notifications</h6></li><li><hr class="dropdown-divider"></li>';
+                        data.forEach(n => {
+                            const bg = n.type === 'success' ? 'bg-success-subtle' : n.type === 'warning' ? 'bg-warning-subtle' : '';
+                            html += `
+                                <li class="${bg}">
+                                    <a class="dropdown-item" href="#" onclick="markRead(${n.id}, event)">
+                                        <small>${n.message}</small>
+                                    </a>
+                                </li>
+                            `;
+                        });
+                        list.innerHTML = html;
+                    } else {
+                        badge.style.display = 'none';
+                        list.innerHTML = '<li><h6 class="dropdown-header">Notifications</h6></li><li><hr class="dropdown-divider"></li><li><span class="dropdown-item text-center small text-muted">No new notifications</span></li>';
+                    }
+                });
+        }
+
+        function markRead(id, event) {
+            event.preventDefault();
+            event.stopPropagation(); // Keep dropdown open? No, usually close.
+            fetch('/api/notifications', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: id})
+            }).then(() => checkNotifications());
+        }
+
+        setInterval(checkNotifications, 30000); // Poll every 30s
+        checkNotifications(); // Initial check
+        {% endif %}
     </script>
 
     {% block scripts %}{% endblock %}

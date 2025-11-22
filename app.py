@@ -26,6 +26,8 @@ from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
 from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix
 from gamification import get_user_badges, check_and_award_badges
+from notifications import get_unread_notifications, mark_notification_read
+from social import get_public_profile
 from decimal import Decimal
 from models import User
 from screener import screen_stocks
@@ -633,6 +635,32 @@ def api_achievements():
 @app.route('/api/sectors')
 def api_sectors():
     return jsonify(get_sector_performance())
+
+@app.route('/api/notifications', methods=['GET', 'POST'])
+@login_required
+def api_notifications():
+    if request.method == 'GET':
+        notifs = get_unread_notifications(current_user.id)
+        # serialize dates
+        for n in notifs:
+            n['created_at'] = n['created_at'].isoformat()
+        return jsonify(notifs)
+
+    # POST to mark read
+    data = request.get_json()
+    notif_id = data.get('id')
+    if notif_id:
+        mark_notification_read(notif_id, current_user.id)
+        return jsonify({'status': 'success'})
+    return jsonify({'status': 'error'}), 400
+
+@app.route('/api/profile/<username>')
+@login_required
+def api_public_profile(username):
+    profile = get_public_profile(username)
+    if not profile:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify(profile)
 
 @app.route('/api/leaderboard')
 @login_required

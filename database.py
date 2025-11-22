@@ -128,6 +128,18 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            message VARCHAR(255) NOT NULL,
+            type VARCHAR(20) DEFAULT 'info',
+            is_read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     # AI Settings Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ai_decision_log (
