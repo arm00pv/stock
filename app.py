@@ -18,6 +18,7 @@ from database import (
     get_watchlist, add_to_watchlist, remove_from_watchlist
 )
 from ai_picker import get_ai_recommendation, get_stock_analysis, get_latest_news
+from ai_prediction import get_sp500_predictions
 from backtesting import run_backtest
 from decimal import Decimal
 from models import User
@@ -52,6 +53,7 @@ TICKER_CATEGORIES = {
 
 class RegistrationForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired(), Length(min=2, max=20)])
+    email = StringField('Email', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Sign Up')
@@ -65,6 +67,16 @@ class RegistrationForm(FlaskForm):
             user = cursor.fetchone()
             if user:
                 raise ValidationError('That username is taken. Please choose a different one.')
+        conn.close()
+
+    def validate_email(self, email):
+        conn = get_db_connection()
+        if not conn: return
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT * FROM users WHERE email = %s", (email.data,))
+            user = cursor.fetchone()
+            if user:
+                raise ValidationError('That email is already registered.')
         conn.close()
 
 class LoginForm(FlaskForm):
@@ -84,7 +96,7 @@ def register():
             flash('Database connection failed. Please try again later.', 'danger')
             return render_template('register.html', title='Register', form=form)
         with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (form.username.data, hashed_password))
+            cursor.execute("INSERT INTO users (username, email, password) VALUES (%s, %s, %s)", (form.username.data, form.email.data, hashed_password))
         conn.commit()
         conn.close()
         flash('Your account has been created! You are now able to log in', 'success')
@@ -106,7 +118,13 @@ def login():
             user_data = cursor.fetchone()
         conn.close()
         if user_data and bcrypt.check_password_hash(user_data['password'], form.password.data):
-            user = User(id=user_data['id'], username=user_data['username'], password=user_data['password'])
+            user = User(
+                id=user_data['id'],
+                username=user_data['username'],
+                password=user_data['password'],
+                email=user_data.get('email'),
+                beta_active=bool(user_data.get('beta_active'))
+            )
             login_user(user, remember=True)
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('index'))
@@ -398,6 +416,46 @@ def api_watchlist():
 def api_stock_news(ticker):
     news = get_latest_news(ticker)
     return jsonify(news)
+
+@app.route('/api/beta/activate', methods=['POST'])
+@login_required
+def api_activate_beta():
+    data = request.get_json()
+    email = data.get('email')
+
+    if not current_user.email and not email:
+        return jsonify({'error': 'Email is required to activate Beta features.'}), 400
+
+    conn = get_db_connection()
+    if not conn: return jsonify({'error': 'Database error'}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            # Update email if provided and different
+            if email and email != current_user.email:
+                cursor.execute("UPDATE users SET email = %s WHERE id = %s", (email, current_user.id))
+
+            cursor.execute("UPDATE users SET beta_active = TRUE WHERE id = %s", (current_user.id,))
+            conn.commit()
+
+            # Update current session user object
+            current_user.beta_active = True
+            if email: current_user.email = email
+
+            return jsonify({'status': 'success', 'message': 'Beta features activated!'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/beta/sp500-predictions')
+@login_required
+def api_sp500_predictions():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    predictions = get_sp500_predictions()
+    return jsonify(predictions)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
