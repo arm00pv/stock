@@ -306,6 +306,46 @@ def get_portfolio_holdings(portfolio_name):
     conn.close()
     return holdings
 
+def get_all_transactions():
+    conn = get_db_connection()
+    if not conn: return []
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            # Return newest first
+            cursor.execute("SELECT * FROM portfolio_transactions ORDER BY purchase_date DESC, id DESC LIMIT 100")
+            return cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching transactions: {err}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+def get_total_portfolio_value():
+    """
+    Calculates the total current value of all portfolios.
+    Note: This requires fetching current prices which might be slow if done synchronously here.
+    For now, we will just return the distribution of 'total_invested' + 'cash_balance' per portfolio as a proxy,
+    or better yet, let the frontend compute value based on the /api/all-portfolios endpoint.
+
+    Let's stick to returning simple DB stats here if needed, but actually /api/all-portfolios already returns computed values.
+    So we might not need a complex function here if the frontend can use existing data.
+
+    However, for a standalone chart API, let's return the 'total_invested' breakdown.
+    """
+    conn = get_db_connection()
+    if not conn: return {}
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            cursor.execute("SELECT portfolio_name, total_invested, cash_balance FROM portfolio_summary")
+            return cursor.fetchall()
+    except mysql.connector.Error as err:
+        print(f"Error fetching portfolio summary: {err}")
+        return []
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
 def execute_sale(portfolio_name, ticker, shares_to_sell, price):
     conn = get_db_connection()
     if not conn:

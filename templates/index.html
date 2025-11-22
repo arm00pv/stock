@@ -3,6 +3,13 @@
 {% block title %}Dashboard - Portfolio Analyzer{% endblock %}
 
 {% block content %}
+<!-- Market Status Ticker -->
+<div class="row mb-4" id="market-status-container">
+    <div class="col-12 text-center">
+        <div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading Market Data...
+    </div>
+</div>
+
 <div class="row mb-4">
     <div class="col-md-12">
         <h1 class="display-4">AI Dashboard</h1>
@@ -75,6 +82,9 @@
                 <button class="nav-link active" id="portfolios-tab" data-bs-toggle="tab" data-bs-target="#portfolios" type="button" role="tab">Portfolios</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">History</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="watchlist-tab" data-bs-toggle="tab" data-bs-target="#watchlist" type="button" role="tab">Watchlist</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -101,9 +111,42 @@
 
             <!-- Portfolios Tab -->
             <div class="tab-pane fade show active" id="portfolios" role="tabpanel">
+                <div class="row mb-4">
+                    <div class="col-md-4 offset-md-4">
+                        <div class="card">
+                            <div class="card-header text-center"><strong>Asset Allocation</strong></div>
+                            <div class="card-body" style="height: 250px;">
+                                <canvas id="allocationChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div class="row" id="portfolios-container">
                     <!-- Portfolio cards will be injected here -->
                     <div class="col-12 text-center"><div class="spinner-border text-primary" role="status"></div></div>
+                </div>
+            </div>
+
+            <!-- History Tab -->
+            <div class="tab-pane fade" id="history" role="tabpanel">
+                <h3 class="mb-3">Transaction History</h3>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Portfolio</th>
+                                <th>Ticker</th>
+                                <th>Action</th>
+                                <th>Shares</th>
+                                <th>Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="7" class="text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -824,7 +867,110 @@
                 loadBetaPredictions();
             });
         }
+
+        document.getElementById('history-tab').addEventListener('shown.bs.tab', function (e) {
+            loadHistory();
+        });
+
+        loadMarketStatus();
+        loadAllocationChart();
     });
+
+    // --- Market Status ---
+    function loadMarketStatus() {
+        fetch(`${API_BASE_URL}/api/market-status`)
+            .then(res => res.json())
+            .then(data => {
+                const container = document.getElementById('market-status-container');
+                if(Object.keys(data).length === 0) {
+                    container.innerHTML = ''; // Hide if failed or empty
+                    return;
+                }
+
+                let html = '';
+                for(const [name, info] of Object.entries(data)) {
+                    const changeColor = info.change >= 0 ? 'text-success' : 'text-danger';
+                    const icon = info.change >= 0 ? 'fa-caret-up' : 'fa-caret-down';
+                    html += `
+                        <div class="col-md-4">
+                            <div class="card text-center shadow-sm border-0">
+                                <div class="card-body py-2">
+                                    <h6 class="card-title text-muted mb-1">${name}</h6>
+                                    <h4 class="mb-0">${info.price.toFixed(2)} <small class="${changeColor} fs-6"><i class="fas ${icon}"></i> ${Math.abs(info.change).toFixed(2)} (${info.change_pct.toFixed(2)}%)</small></h4>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            });
+    }
+
+    // --- Allocation Chart ---
+    function loadAllocationChart() {
+        fetch(`${API_BASE_URL}/api/allocation`)
+            .then(res => res.json())
+            .then(data => {
+                const ctx = document.getElementById('allocationChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.map(d => d.portfolio.replace(/_/g, ' ')),
+                        datasets: [{
+                            data: data.map(d => d.value),
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.7)',
+                                'rgba(54, 162, 235, 0.7)',
+                                'rgba(255, 206, 86, 0.7)',
+                                'rgba(75, 192, 192, 0.7)',
+                                'rgba(153, 102, 255, 0.7)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } }
+                        }
+                    }
+                });
+            });
+    }
+
+    // --- Transaction History ---
+    function loadHistory() {
+        const tbody = document.getElementById('history-table').querySelector('tbody');
+        // only load if empty
+        if(tbody.children.length > 1 && tbody.children[0].innerText !== "Loading...") return;
+
+        fetch(`${API_BASE_URL}/api/transactions`)
+            .then(res => res.json())
+            .then(data => {
+                tbody.innerHTML = '';
+                if(data.length > 0) {
+                    data.forEach(t => {
+                        const type = t.shares > 0 ? 'BUY' : 'SELL';
+                        const typeClass = t.shares > 0 ? 'text-success' : 'text-danger';
+                        const total = Math.abs(t.shares * t.purchase_price).toFixed(2);
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>${t.purchase_date}</td>
+                                <td class="text-capitalize">${t.portfolio_name.replace(/_/g, ' ')}</td>
+                                <td>${createTickerLink(t.ticker)}</td>
+                                <td class="${typeClass} fw-bold">${type}</td>
+                                <td>${Math.abs(t.shares).toFixed(4)}</td>
+                                <td>$${t.purchase_price.toFixed(2)}</td>
+                                <td>$${total}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">No transactions found.</td></tr>';
+                }
+            });
+    }
 
     function activateBeta() {
         const email = document.getElementById('beta-email').value;

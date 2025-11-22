@@ -15,10 +15,12 @@ from database import (
     save_daily_pick, get_pick_history_for_category, get_recently_picked_tickers,
     execute_investment, get_ai_settings, save_ai_settings, get_db_connection, execute_sale,
     get_ai_performance_data, search_stocks_db, get_new_listings,
-    get_watchlist, add_to_watchlist, remove_from_watchlist
+    get_watchlist, add_to_watchlist, remove_from_watchlist,
+    get_all_transactions, get_total_portfolio_value
 )
 from ai_picker import get_ai_recommendation, get_stock_analysis, get_latest_news
 from ai_prediction import get_sp500_predictions
+from market_data import get_market_status
 from backtesting import run_backtest
 from decimal import Decimal
 from models import User
@@ -456,6 +458,37 @@ def api_sp500_predictions():
 
     predictions = get_sp500_predictions()
     return jsonify(predictions)
+
+@app.route('/api/market-status')
+def api_market_status():
+    # Cache could be added here
+    return jsonify(get_market_status())
+
+@app.route('/api/transactions')
+@login_required
+def api_transactions():
+    transactions = get_all_transactions()
+    # Convert date objects to string
+    for t in transactions:
+        t['purchase_date'] = t['purchase_date'].strftime('%Y-%m-%d')
+        # Clean decimal
+        t['shares'] = float(t['shares'])
+        t['purchase_price'] = float(t['purchase_price'])
+    return jsonify(transactions)
+
+@app.route('/api/allocation')
+@login_required
+def api_allocation():
+    data = get_total_portfolio_value()
+    # Process for chart: just return list of {name, value}
+    result = []
+    for row in data:
+        # Use total_invested + cash_balance as total assets
+        result.append({
+            'portfolio': row['portfolio_name'],
+            'value': float(row['total_invested']) + float(row['cash_balance'])
+        })
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=False, port=5000)
