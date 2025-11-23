@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -557,6 +557,34 @@ def api_community_vote():
 
     success = cast_vote(current_user.id, ticker, vote)
     return jsonify({'status': 'success' if success else 'error'})
+
+@app.route('/api/beta/optimize', methods=['POST'])
+@login_required
+def api_beta_optimize():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    if not tickers:
+        return jsonify({'error': 'No tickers provided'}), 400
+
+    result = optimize_portfolio(tickers)
+    return jsonify(result)
+
+@app.route('/api/beta/earnings', methods=['POST'])
+@login_required
+def api_beta_earnings():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    if not tickers:
+        return jsonify({'error': 'No tickers provided'}), 400
+
+    result = get_earnings_calendar(tickers)
+    return jsonify(result)
 
 @app.route('/api/beta/patterns')
 @login_required

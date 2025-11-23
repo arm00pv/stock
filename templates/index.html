@@ -177,6 +177,7 @@
                     <h3>My Watchlist</h3>
                     <div>
                         {% if current_user.beta_active %}
+                        <button class="btn btn-outline-info btn-sm me-1" onclick="showEarningsModal()"><i class="fas fa-calendar-alt"></i> Earnings</button>
                         <button class="btn btn-outline-info btn-sm me-1" onclick="showCorrelationModal()"><i class="fas fa-th"></i> Correlation</button>
                         {% endif %}
                         <button class="btn btn-primary btn-sm" onclick="refreshWatchlist()"><i class="fas fa-sync"></i> Refresh</button>
@@ -664,6 +665,59 @@
             <hr>
             <h5>Badges</h5>
             <div id="profile-badges"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Optimization Modal -->
+<div class="modal fade" id="optimizeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">AI Portfolio Optimization</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Suggested allocation to maximize Sharpe Ratio (Risk-Adjusted Return).</p>
+        <div id="optimize-stats" class="mb-3"></div>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Optimal Allocation</h6>
+                <div style="height: 250px; width: 100%;">
+                    <canvas id="optimizeChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>Details</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm" id="optimize-table">
+                        <thead><tr><th>Ticker</th><th>Weight</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Earnings Modal -->
+<div class="modal fade" id="earningsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Earnings Calendar</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive">
+            <table class="table table-striped" id="earnings-table">
+                <thead><tr><th>Ticker</th><th>Earnings Date</th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
       </div>
     </div>
@@ -1698,6 +1752,112 @@
         });
     }
 
+    // --- Earnings Calendar ---
+    function showEarningsModal() {
+        const modal = new bootstrap.Modal(document.getElementById('earningsModal'));
+        modal.show();
+        const tbody = document.getElementById('earnings-table').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="2" class="text-center">Loading...</td></tr>';
+
+        fetch(`${API_BASE_URL}/api/watchlist`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="2" class="text-center">Watchlist is empty.</td></tr>';
+                    return;
+                }
+                const tickers = data.map(item => item.ticker);
+
+                fetch(`${API_BASE_URL}/api/beta/earnings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: tickers })
+                })
+                .then(res => res.json())
+                .then(calendar => {
+                    tbody.innerHTML = '';
+                    if(calendar.length > 0) {
+                        calendar.forEach(e => {
+                            tbody.innerHTML += `<tr><td>${e.ticker}</td><td>${e.date}</td></tr>`;
+                        });
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="2" class="text-center">No upcoming earnings found.</td></tr>';
+                    }
+                });
+            });
+    }
+
+    // --- Optimization ---
+    function optimizeSimulatorPortfolio() {
+        fetch(`${API_BASE_URL}/api/personal/portfolio`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data.holdings || data.holdings.length < 2) {
+                    alert("Need at least 2 holdings to optimize.");
+                    return;
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('optimizeModal'));
+                modal.show();
+                document.getElementById('optimize-stats').innerHTML = 'Calculating optimal weights...';
+
+                const tickers = data.holdings.map(h => h.ticker);
+
+                fetch(`${API_BASE_URL}/api/beta/optimize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: tickers })
+                })
+                .then(res => res.json())
+                .then(opt => {
+                    if(opt.error) {
+                        document.getElementById('optimize-stats').innerText = opt.error;
+                        return;
+                    }
+
+                    document.getElementById('optimize-stats').innerHTML = `
+                        <strong>Expected Return:</strong> ${opt.metrics.expected_return}% <br>
+                        <strong>Volatility:</strong> ${opt.metrics.volatility}% <br>
+                        <strong>Sharpe Ratio:</strong> ${opt.metrics.sharpe_ratio}
+                    `;
+
+                    const tbody = document.getElementById('optimize-table').querySelector('tbody');
+                    tbody.innerHTML = '';
+
+                    // Prepare chart data
+                    const labels = [];
+                    const values = [];
+
+                    for (const [ticker, weight] of Object.entries(opt.weights)) {
+                        tbody.innerHTML += `<tr><td>${ticker}</td><td>${weight}%</td></tr>`;
+                        labels.push(ticker);
+                        values.push(weight);
+                    }
+
+                    const ctx = document.getElementById('optimizeChart').getContext('2d');
+                    // Destroy old chart if exists (global ref problem, need to store on element or variable)
+                    // Simplest hack: Recreate canvas
+                    // Actually we use different IDs for charts so it's okay if modal is destroyed?
+                    // No, Chart instance stays attached.
+                    // Let's assume simple usage or replace canvas content.
+
+                    new Chart(ctx, {
+                        type: 'pie',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: values,
+                                backgroundColor: [
+                                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+                                ]
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+                });
+            });
+    }
+
     function showCorrelationModal() {
         const modal = new bootstrap.Modal(document.getElementById('correlationModal'));
         modal.show();
@@ -1815,7 +1975,12 @@
                     <div class="row mb-3">
                         <div class="col-md-8">
                             <div class="card h-100">
-                                <div class="card-header">Your Holdings</div>
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span>Your Holdings</span>
+                                    {% if current_user.beta_active %}
+                                    <button class="btn btn-sm btn-outline-primary" onclick="optimizeSimulatorPortfolio()"><i class="fas fa-magic"></i> AI Optimize</button>
+                                    {% endif %}
+                                </div>
                                 <div class="table-responsive">
                                     <table class="table table-hover small mb-0">
                                         <thead><tr><th>Ticker</th><th>Shares</th><th>Avg Cost</th><th>Price</th><th>Return</th><th>Value</th><th>Action</th></tr></thead>

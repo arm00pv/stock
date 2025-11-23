@@ -1,6 +1,8 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 import logging
+from scipy.optimize import minimize
 from database import get_db_connection
 from sp500_list import SP500_TICKERS
 from notifications import create_notification
@@ -398,3 +400,89 @@ def get_advanced_ticker_details(ticker):
     except Exception as e:
         logging.error(f"Error fetching advanced details for {ticker}: {e}")
         return None
+
+def optimize_portfolio(tickers):
+    """
+    Calculates optimal portfolio weights using Mean-Variance Optimization (Max Sharpe).
+    """
+    if len(tickers) < 2:
+        return {"error": "Need at least 2 assets to optimize."}
+
+    try:
+        # Fetch data
+        data = yf.download(tickers, period="1y", progress=False)['Close']
+        if data.empty: return {"error": "No data found."}
+
+        # Calculate returns
+        returns = data.pct_change().dropna()
+        mean_returns = returns.mean()
+        cov_matrix = returns.cov()
+        num_assets = len(tickers)
+
+        # Risk-free rate assumption
+        rf = 0.04
+
+        def portfolio_performance(weights, mean_returns, cov_matrix):
+            returns = np.sum(mean_returns * weights) * 252
+            std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(252)
+            return returns, std
+
+        def negative_sharpe(weights, mean_returns, cov_matrix, rf):
+            p_ret, p_var = portfolio_performance(weights, mean_returns, cov_matrix)
+            return -(p_ret - rf) / p_var
+
+        constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+        bounds = tuple((0, 1) for asset in range(num_assets))
+        init_guess = num_assets * [1. / num_assets,]
+
+        opt_results = minimize(negative_sharpe, init_guess, args=(mean_returns, cov_matrix, rf), method='SLSQP', bounds=bounds, constraints=constraints)
+
+        optimal_weights = opt_results.x
+        opt_ret, opt_std = portfolio_performance(optimal_weights, mean_returns, cov_matrix)
+        opt_sharpe = (opt_ret - rf) / opt_std
+
+        # Format results
+        weights_dict = {ticker: round(weight * 100, 2) for ticker, weight in zip(tickers, optimal_weights) if weight > 0.001}
+
+        return {
+            "weights": weights_dict,
+            "metrics": {
+                "expected_return": round(opt_ret * 100, 2),
+                "volatility": round(opt_std * 100, 2),
+                "sharpe_ratio": round(opt_sharpe, 2)
+            }
+        }
+
+    except Exception as e:
+        logging.error(f"Optimization failed: {e}")
+        return {"error": str(e)}
+
+def get_earnings_calendar(tickers):
+    """
+    Fetches upcoming earnings dates for a list of tickers.
+    """
+    results = []
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            cal = stock.calendar
+            # cal is a dict or dataframe
+            if cal and isinstance(cal, dict):
+                date = cal.get('Earnings Date', [])
+                if date:
+                    date = date[0] if isinstance(date, list) else date
+                    results.append({"ticker": ticker, "date": str(date)})
+            elif hasattr(stock, 'earnings_dates'):
+                 # Fallback to earnings_dates dataframe
+                 ed = stock.earnings_dates
+                 if ed is not None and not ed.empty:
+                     # Find next future date
+                     future = ed[ed.index > pd.Timestamp.now()]
+                     if not future.empty:
+                         next_date = future.index[-1] # Ascending? typically descending.
+                         # Actually indices are dates.
+                         # Let's just grab the first one if sorted correctly or filter.
+                         results.append({"ticker": ticker, "date": str(future.index[0].date())})
+        except:
+            continue
+    return results
