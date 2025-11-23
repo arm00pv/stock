@@ -203,15 +203,33 @@
             <!-- Beta Predictions Tab -->
             {% if current_user.beta_active %}
             <div class="tab-pane fade" id="beta-predictions" role="tabpanel">
-                <div class="card mb-3 border-info">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="card-title mb-0"><i class="fas fa-newspaper"></i> AI Market Sentiment</h5>
-                            <small class="text-muted">Analysis of SPY, QQQ, BTC headlines</small>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="card border-info h-100">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="card-title mb-0"><i class="fas fa-newspaper"></i> Market Sentiment</h5>
+                                    <small class="text-muted">News Analysis (SPY, QQQ)</small>
+                                </div>
+                                <div class="text-end">
+                                    <h2 id="sentiment-score" class="mb-0">--</h2>
+                                    <span id="sentiment-label" class="badge bg-secondary">Loading...</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="text-end">
-                            <h2 id="sentiment-score" class="mb-0">--</h2>
-                            <span id="sentiment-label" class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-warning h-100">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="card-title mb-0"><i class="fab fa-bitcoin"></i> Crypto Fear & Greed</h5>
+                                    <small class="text-muted">Alternative.me Index</small>
+                                </div>
+                                <div class="text-end">
+                                    <h2 id="crypto-score" class="mb-0">--</h2>
+                                    <span id="crypto-label" class="badge bg-secondary">Loading...</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -651,6 +669,40 @@
                 </thead>
                 <tbody></tbody>
             </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monte Carlo Modal -->
+<div class="modal fade" id="monteCarloModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Monte Carlo Portfolio Simulation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Projected portfolio value over 90 days based on 1000 simulations.</p>
+        <div id="mc-loading" class="text-center"><div class="spinner-border text-primary"></div></div>
+        <div id="mc-content" style="display: none;">
+            <div class="row mb-3 text-center">
+                <div class="col-6">
+                    <small class="text-muted">Expected Annual Return</small>
+                    <h5 id="mc-return"></h5>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted">Projected Volatility</small>
+                    <h5 id="mc-vol"></h5>
+                </div>
+            </div>
+            <div style="height: 300px; width: 100%;">
+                <canvas id="mcChart"></canvas>
+            </div>
+            <div class="mt-3 small text-muted text-center">
+                Solid Line: Median (P50). Shaded Area: 10th-90th Percentile outcome range.
+            </div>
         </div>
       </div>
     </div>
@@ -1477,6 +1529,120 @@
         loadAlerts();
         loadPatterns();
         loadMarketSentiment();
+        loadCryptoSentiment();
+    }
+
+    function loadCryptoSentiment() {
+        fetch(`${API_BASE_URL}/api/beta/crypto-sentiment`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) return;
+
+                const scoreEl = document.getElementById('crypto-score');
+                const labelEl = document.getElementById('crypto-label');
+                if(!scoreEl) return;
+
+                scoreEl.innerText = data.value;
+                labelEl.innerText = data.classification;
+
+                let color = 'secondary';
+                const val = data.value;
+                if(val >= 75) color = 'success'; // Extreme Greed
+                else if(val >= 55) color = 'success'; // Greed
+                else if(val <= 25) color = 'danger'; // Extreme Fear
+                else if(val <= 45) color = 'danger'; // Fear
+                else color = 'warning'; // Neutral
+
+                labelEl.className = `badge bg-${color}`;
+                scoreEl.className = `mb-0 text-${color}`;
+            });
+    }
+
+    let mcChart = null;
+    function showMonteCarloModal() {
+        const modal = new bootstrap.Modal(document.getElementById('monteCarloModal'));
+        modal.show();
+        document.getElementById('mc-loading').style.display = 'block';
+        document.getElementById('mc-content').style.display = 'none';
+
+        fetch(`${API_BASE_URL}/api/personal/portfolio`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data.holdings || data.holdings.length === 0) {
+                    document.getElementById('mc-loading').innerHTML = 'No holdings.';
+                    return;
+                }
+                const tickers = data.holdings.map(h => h.ticker);
+                const totalVal = data.holdings.reduce((sum, h) => sum + h.value, 0);
+                const weights = data.holdings.map(h => h.value / totalVal);
+
+                fetch(`${API_BASE_URL}/api/beta/monte-carlo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: tickers, weights: weights })
+                })
+                .then(res => res.json())
+                .then(sim => {
+                    if(sim.error) {
+                        document.getElementById('mc-loading').innerText = sim.error;
+                        return;
+                    }
+
+                    document.getElementById('mc-return').innerText = sim.metrics.expected_return + '%';
+                    document.getElementById('mc-vol').innerText = sim.metrics.volatility + '%';
+
+                    document.getElementById('mc-loading').style.display = 'none';
+                    document.getElementById('mc-content').style.display = 'block';
+
+                    const ctx = document.getElementById('mcChart').getContext('2d');
+                    if(mcChart) mcChart.destroy();
+
+                    mcChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: sim.days,
+                            datasets: [
+                                {
+                                    label: 'P90 (Bull Case)',
+                                    data: sim.p90,
+                                    borderColor: 'rgba(75, 192, 192, 0.5)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                                    fill: '+1', // Fill to next dataset
+                                    pointRadius: 0,
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: 'P50 (Median)',
+                                    data: sim.p50,
+                                    borderColor: 'rgb(54, 162, 235)',
+                                    fill: false,
+                                    pointRadius: 0,
+                                    borderWidth: 2
+                                },
+                                {
+                                    label: 'P10 (Bear Case)',
+                                    data: sim.p10,
+                                    borderColor: 'rgba(255, 99, 132, 0.5)',
+                                    fill: false, // Already filled from top
+                                    pointRadius: 0,
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'top' },
+                                tooltip: { mode: 'index', intersect: false }
+                            },
+                            scales: {
+                                y: { title: { display: true, text: 'Portfolio Value (Indexed at 100)' } }
+                            }
+                        }
+                    });
+                });
+            });
     }
 
     function loadMarketSentiment() {
@@ -2097,6 +2263,7 @@
                                     {% if current_user.beta_active %}
                                     <button class="btn btn-sm btn-outline-primary" onclick="optimizeSimulatorPortfolio()"><i class="fas fa-magic"></i> AI Optimize</button>
                                     <button class="btn btn-sm btn-outline-danger ms-1" onclick="showRiskAnalysisModal()"><i class="fas fa-shield-alt"></i> Risk Check</button>
+                                    <button class="btn btn-sm btn-outline-warning ms-1" onclick="showMonteCarloModal()"><i class="fas fa-chart-area"></i> Future Proj.</button>
                                     {% endif %}
                                 </div>
                                 <div class="table-responsive">

@@ -56,3 +56,70 @@
 2025-11-23 04:24:11,335 - ERROR - Could not fetch news for META: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=META&limit=5&language=en
 2025-11-23 04:24:11,385 - ERROR - Could not fetch news for NAKD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=NAKD&limit=5&language=en
 2025-11-23 04:24:11,392 - ERROR - Could not fetch news for EPR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=EPR&limit=5&language=en
+2025-11-23 23:05:04,541 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-11-23 23:05:04,541 - INFO - [33mPress CTRL+C to quit[0m
+2025-11-23 23:05:06,977 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:06] "GET /login HTTP/1.1" 200 -
+2025-11-23 23:05:07,041 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:07] "GET /static/style.css HTTP/1.1" 200 -
+2025-11-23 23:05:08,482 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:08] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-11-23 23:05:08,940 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:08] "GET / HTTP/1.1" 200 -
+2025-11-23 23:05:08,961 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:08] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+2025-11-23 23:05:09,605 - INFO - Starting AI recommendation for category: hot_stock
+2025-11-23 23:05:09,615 - INFO - Starting AI recommendation for category: crypto
+2025-11-23 23:05:09,632 - INFO - Starting AI recommendation for category: high_yield
+2025-11-23 23:05:09,659 - INFO - Starting AI recommendation for category: monthly_dividend
+2025-11-23 23:05:09,662 - INFO - Starting AI recommendation for category: penny_stock
+2025-11-23 23:05:09,848 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:09] "GET /api/notifications HTTP/1.1" 200 -
+2025-11-23 23:05:10,039 - WARNING - No AI settings found for category crypto. Using default weights.
+2025-11-23 23:05:10,598 - ERROR - Could not fetch news for BTC-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=BTC-USD&limit=5&language=en
+2025-11-23 23:05:10,601 - ERROR - Could not fetch news for AAPL: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=AAPL&limit=5&language=en
+2025-11-23 23:05:10,747 - ERROR - Could not fetch news for SNDL: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=SNDL&limit=5&language=en
+2025-11-23 23:05:10,751 - ERROR - Could not fetch news for O: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=O&limit=5&language=en
+2025-11-23 23:05:10,764 - ERROR - Could not fetch news for AGNC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=AGNC&limit=5&language=en
+2025-11-23 23:05:10,799 - ERROR - Could not fetch news for ETH-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ETH-USD&limit=5&language=en
+2025-11-23 23:05:10,842 - ERROR - Could not fetch news for MSFT: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=MSFT&limit=5&language=en
+2025-11-23 23:05:10,974 - ERROR - Could not fetch news for MAIN: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=MAIN&limit=5&language=en
+2025-11-23 23:05:10,991 - ERROR - Could not fetch news for ORC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ORC&limit=5&language=en
+2025-11-23 23:05:11,004 - ERROR - Could not fetch news for CTRM: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=CTRM&limit=5&language=en
+2025-11-23 23:05:11,015 - ERROR - Could not fetch news for SOL-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=SOL-USD&limit=5&language=en
+2025-11-23 23:05:11,065 - ERROR - Could not fetch news for GOOG: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=GOOG&limit=5&language=en
+2025-11-23 23:05:11,147 - ERROR - Could not fetch news for STAG: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=STAG&limit=5&language=en
+2025-11-23 23:05:11,204 - ERROR - Could not fetch news for PSEC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=PSEC&limit=5&language=en
+2025-11-23 23:05:11,233 - ERROR - Could not fetch news for DOGE-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=DOGE-USD&limit=5&language=en
+2025-11-23 23:05:11,252 - ERROR - Could not fetch news for AMZN: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=AMZN&limit=5&language=en
+2025-11-23 23:05:11,255 - ERROR - Could not fetch news for ZOM: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ZOM&limit=5&language=en
+2025-11-23 23:05:11,322 - ERROR - Could not fetch news for GAIN: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=GAIN&limit=5&language=en
+2025-11-23 23:05:11,363 - ERROR - Could not fetch news for ARR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ARR&limit=5&language=en
+2025-11-23 23:05:11,433 - ERROR - Could not fetch news for ADA-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ADA-USD&limit=5&language=en
+2025-11-23 23:05:11,467 - ERROR - Could not fetch news for NVDA: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=NVDA&limit=5&language=en
+2025-11-23 23:05:11,472 - ERROR - Could not fetch news for AMC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=AMC&limit=5&language=en
+2025-11-23 23:05:11,500 - ERROR - Could not fetch news for GOOD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=GOOD&limit=5&language=en
+2025-11-23 23:05:11,525 - ERROR - Could not fetch news for MFA: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=MFA&limit=5&language=en
+2025-11-23 23:05:11,637 - ERROR - Could not fetch news for XRP-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=XRP-USD&limit=5&language=en
+2025-11-23 23:05:11,697 - ERROR - Could not fetch news for TSLA: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=TSLA&limit=5&language=en
+2025-11-23 23:05:11,724 - ERROR - Could not fetch news for PBA: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=PBA&limit=5&language=en
+2025-11-23 23:05:11,746 - ERROR - Could not fetch news for BB: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=BB&limit=5&language=en
+2025-11-23 23:05:11,757 - ERROR - Could not fetch news for IVR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=IVR&limit=5&language=en
+2025-11-23 23:05:11,797 - ERROR - Could not fetch news for DOT-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=DOT-USD&limit=5&language=en
+2025-11-23 23:05:11,842 - ERROR - Could not fetch news for META: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=META&limit=5&language=en
+2025-11-23 23:05:11,912 - ERROR - Could not fetch news for SBR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=SBR&limit=5&language=en
+2025-11-23 23:05:11,952 - ERROR - Could not fetch news for EXPR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=EXPR&limit=5&language=en
+2025-11-23 23:05:11,987 - ERROR - Could not fetch news for LTC-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=LTC-USD&limit=5&language=en
+2025-11-23 23:05:11,993 - ERROR - Could not fetch news for TWO: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=TWO&limit=5&language=en
+2025-11-23 23:05:12,028 - ERROR - Could not fetch news for JPM: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=JPM&limit=5&language=en
+2025-11-23 23:05:12,065 - ERROR - Could not fetch news for ADC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=ADC&limit=5&language=en
+2025-11-23 23:05:12,140 - ERROR - Could not fetch news for GSAT: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=GSAT&limit=5&language=en
+2025-11-23 23:05:12,222 - ERROR - Could not fetch news for EARN: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=EARN&limit=5&language=en
+2025-11-23 23:05:12,236 - ERROR - Could not fetch news for LINK-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=LINK-USD&limit=5&language=en
+2025-11-23 23:05:12,262 - ERROR - Could not fetch news for JNJ: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=JNJ&limit=5&language=en
+2025-11-23 23:05:12,282 - ERROR - Could not fetch news for EPR: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=EPR&limit=5&language=en
+2025-11-23 23:05:12,310 - ERROR - Could not fetch news for NAKD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=NAKD&limit=5&language=en
+2025-11-23 23:05:12,418 - ERROR - Could not fetch news for OXLC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=OXLC&limit=5&language=en
+2025-11-23 23:05:12,456 - ERROR - Could not fetch news for BCH-USD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=BCH-USD&limit=5&language=en
+2025-11-23 23:05:12,474 - INFO - The CSRF token is missing.
+2025-11-23 23:05:12,476 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:12] "POST /login HTTP/1.1" 200 -
+2025-11-23 23:05:12,494 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:12] "[32mPOST /api/beta/monte-carlo HTTP/1.1[0m" 302 -
+2025-11-23 23:05:12,503 - ERROR - Could not fetch news for V: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=V&limit=5&language=en
+2025-11-23 23:05:12,506 - INFO - 127.0.0.1 - - [23/Nov/2025 23:05:12] "GET /login?next=/api/beta/monte-carlo HTTP/1.1" 200 -
+2025-11-23 23:05:12,537 - ERROR - Could not fetch news for LTC: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=LTC&limit=5&language=en
+2025-11-23 23:05:12,555 - ERROR - Could not fetch news for TXMD: 402 Client Error: Payment Required for url: https://api.marketaux.com/v1/news/all?api_token=gSj0h2MJtfGmMNB9JQyuo1dtArXAGhiYv3IhpGbQ&symbols=TXMD&limit=5&language=en

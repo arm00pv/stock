@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import logging
+import requests
 from scipy.optimize import minimize
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from database import get_db_connection
@@ -628,4 +629,108 @@ def get_market_sentiment():
         }
     except Exception as e:
         logging.error(f"Sentiment error: {e}")
+        return {"error": str(e)}
+
+def get_crypto_sentiment():
+    """
+    Fetches Crypto Fear & Greed Index from alternative.me.
+    """
+    try:
+        response = requests.get("https://api.alternative.me/fng/")
+        if response.status_code == 200:
+            data = response.json()
+            item = data['data'][0]
+            return {
+                "value": int(item['value']),
+                "classification": item['value_classification'],
+                "timestamp": int(item['timestamp'])
+            }
+        return {"error": "Failed to fetch data"}
+    except Exception as e:
+        logging.error(f"Crypto sentiment error: {e}")
+        return {"error": str(e)}
+
+def run_monte_carlo_simulation(tickers, weights=None, days=90, simulations=1000):
+    """
+    Runs a Monte Carlo simulation for portfolio future value.
+    Returns 10th, 50th, 90th percentile paths.
+    """
+    try:
+        if not tickers: return {"error": "No tickers"}
+
+        # Get history
+        data = yf.download(tickers, period="1y", progress=False)
+        if data.empty: return {"error": "No data"}
+
+        if 'Close' in data: prices = data['Close']
+        else: prices = data
+
+        if isinstance(prices, pd.Series): prices = prices.to_frame()
+        prices = prices.dropna()
+
+        if prices.empty: return {"error": "Insufficient data"}
+
+        if len(tickers) > 1 and not weights:
+            weights = np.array([1/len(tickers)] * len(tickers))
+        elif not weights:
+            weights = np.array([1.0])
+        else:
+            weights = np.array(weights)
+
+        returns = prices.pct_change().dropna()
+
+        # Portfolio stats
+        if len(tickers) > 1:
+            mean_returns = returns.mean()
+            cov_matrix = returns.cov()
+
+            # Check alignment
+            if len(mean_returns) != len(weights):
+                 # Simple fallback for robustness
+                 weights = np.array([1/len(mean_returns)] * len(mean_returns))
+
+            port_mean = np.sum(mean_returns * weights)
+            port_std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        else:
+            # Single ticker
+            if returns.shape[1] > 1:
+                 # Handling edge case where 'prices' has multiple cols but tickers len is 1 (unlikely with yf)
+                 returns = returns.iloc[:,0]
+            elif isinstance(returns, pd.DataFrame):
+                 returns = returns.iloc[:,0]
+
+            port_mean = returns.mean()
+            port_std = returns.std()
+
+        # Simulation
+        # Geometric Brownian Motion
+        sim_results = np.zeros((days, simulations))
+        initial_value = 100 # Normalized start
+
+        for s in range(simulations):
+            price_path = [initial_value]
+            for d in range(days):
+                drift = port_mean - (0.5 * port_std**2)
+                shock = port_std * np.random.normal()
+                price = price_path[-1] * np.exp(drift + shock)
+                price_path.append(price)
+            sim_results[:, s] = price_path[1:]
+
+        p10 = np.percentile(sim_results, 10, axis=1)
+        p50 = np.percentile(sim_results, 50, axis=1)
+        p90 = np.percentile(sim_results, 90, axis=1)
+
+        return {
+            "days": list(range(1, days + 1)),
+            "p10": [round(x, 2) for x in p10],
+            "p50": [round(x, 2) for x in p50],
+            "p90": [round(x, 2) for x in p90],
+            "metrics": {
+                "expected_return": round(port_mean * 252 * 100, 2),
+                "volatility": round(port_std * np.sqrt(252) * 100, 2)
+            }
+        }
+
+    except Exception as e:
+        logging.error(f"Monte Carlo error: {e}")
         return {"error": str(e)}
