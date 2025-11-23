@@ -5,3 +5,7 @@ python-dotenv
 Flask-Login
 Flask-Bcrypt
 Flask-WTF
+pandas
+numpy
+scipy
+vaderSentiment

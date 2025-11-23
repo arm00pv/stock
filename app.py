@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -584,6 +584,30 @@ def api_beta_earnings():
         return jsonify({'error': 'No tickers provided'}), 400
 
     result = get_earnings_calendar(tickers)
+    return jsonify(result)
+
+@app.route('/api/beta/risk', methods=['POST'])
+@login_required
+def api_beta_risk():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    weights = data.get('weights', []) # Optional list of floats
+    if not tickers:
+        return jsonify({'error': 'No tickers provided'}), 400
+
+    result = get_portfolio_risk_metrics(tickers, weights)
+    return jsonify(result)
+
+@app.route('/api/beta/market-sentiment')
+@login_required
+def api_beta_sentiment():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    result = get_market_sentiment()
     return jsonify(result)
 
 @app.route('/api/beta/patterns')

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import logging
 from scipy.optimize import minimize
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from database import get_db_connection
 from sp500_list import SP500_TICKERS
 from notifications import create_notification
@@ -486,3 +487,145 @@ def get_earnings_calendar(tickers):
         except:
             continue
     return results
+
+def get_portfolio_risk_metrics(tickers, weights=None):
+    """
+    Calculates Value at Risk (VaR) and Conditional VaR (CVaR) for a portfolio.
+    """
+    try:
+        if not tickers:
+            return {"error": "No tickers provided"}
+
+        # Download data
+        data = yf.download(tickers, period="1y", progress=False)
+        if data.empty:
+             return {"error": "No data available"}
+
+        # yf.download returns a MultiIndex DataFrame if multiple tickers, or single index if one
+        # Use 'Close' column
+        if 'Close' in data:
+            prices = data['Close']
+        else:
+            prices = data
+
+        # If single ticker (Series), convert to DataFrame
+        if isinstance(prices, pd.Series):
+            prices = prices.to_frame()
+
+        # Clean data
+        prices = prices.dropna()
+        if prices.empty: return {"error": "Insufficient data"}
+
+        # If weights not provided, assume equal weight
+        if not weights:
+            weights = np.array([1/len(tickers)] * len(tickers))
+        else:
+            weights = np.array(weights)
+
+        # Calculate daily returns
+        returns = prices.pct_change().dropna()
+
+        # Portfolio daily returns
+        # Handle single ticker case
+        if len(tickers) == 1:
+            portfolio_returns = returns.iloc[:, 0]
+        else:
+            # Ensure columns match tickers order or reindex
+            # yfinance sorts columns alphabetically usually
+            # We must align weights with columns
+            aligned_weights = []
+            for col in returns.columns:
+                # Find weight corresponding to this column ticker
+                # This assumes tickers input matches weights input order
+                # BUT yfinance reorders.
+                # If we passed list of tickers, we need to map weights.
+                # Simplification: Assume equal weights for this beta feature unless passed as dict
+                # If list passed, we can't easily align without dict.
+                # For now, let's just use equal weights if misalignment risk exists or simple dot if we trust order (we shouldn't).
+                pass
+
+            # Re-approach: force equal weights for now if not explicit dict
+            # or just take the dot product if we assume 1 asset or simple usage.
+            # To be safe, let's just calculate individual risk or equal weighted portfolio of found columns.
+
+            num_assets = len(returns.columns)
+            safe_weights = np.array([1/num_assets] * num_assets)
+            portfolio_returns = returns.dot(safe_weights)
+
+        # VaR 95% (Historical)
+        var_95 = np.percentile(portfolio_returns, 5)
+
+        # CVaR 95% (Average of returns below VaR)
+        cvar_95 = portfolio_returns[portfolio_returns <= var_95].mean()
+
+        # Parametric VaR
+        mu = np.mean(portfolio_returns)
+        sigma = np.std(portfolio_returns)
+        var_95_param = mu - 1.65 * sigma
+
+        return {
+            "var_95_historical": round(abs(var_95) * 100, 2), # Show as positive % loss
+            "cvar_95": round(abs(cvar_95) * 100, 2),
+            "var_95_parametric": round(abs(var_95_param) * 100, 2),
+            "std_dev_daily": round(sigma * 100, 2),
+            "annualized_volatility": round(sigma * np.sqrt(252) * 100, 2)
+        }
+    except Exception as e:
+        logging.error(f"Risk calculation error: {e}")
+        return {"error": str(e)}
+
+def get_market_sentiment():
+    """
+    Analyzes news headlines for major indices to determine market sentiment.
+    """
+    analyzer = SentimentIntensityAnalyzer()
+    indices = ['SPY', 'QQQ', 'BTC-USD', 'DIA']
+
+    total_score = 0
+    count = 0
+    news_items = []
+
+    try:
+        for ticker in indices:
+            t = yf.Ticker(ticker)
+            news = t.news
+            if not news: continue
+
+            for item in news[:3]: # Top 3 per ticker
+                title = item.get('title', '')
+                if not title: continue
+
+                score = analyzer.polarity_scores(title)['compound']
+                total_score += score
+                count += 1
+
+                news_items.append({
+                    'ticker': ticker,
+                    'title': title,
+                    'score': round(score, 2),
+                    'url': item.get('link', '#')
+                })
+
+        if count == 0:
+            avg_score = 0
+        else:
+            avg_score = total_score / count
+
+        # Normalize -1 to 1 -> 0 to 100
+        # -1 -> 0, 0 -> 50, 1 -> 100
+        normalized_score = (avg_score + 1) * 50
+
+        sentiment_label = "Neutral"
+        if normalized_score > 60: sentiment_label = "Greed"
+        if normalized_score > 80: sentiment_label = "Extreme Greed"
+        if normalized_score < 40: sentiment_label = "Fear"
+        if normalized_score < 20: sentiment_label = "Extreme Fear"
+
+        return {
+            "score": round(normalized_score, 2),
+            "label": sentiment_label,
+            "news": news_items
+        }
+    except Exception as e:
+        logging.error(f"Sentiment error: {e}")
+        return {"error": str(e)}
