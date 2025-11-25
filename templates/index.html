@@ -234,6 +234,19 @@
                     </div>
                 </div>
 
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header"><i class="fas fa-globe"></i> Global Markets</div>
+                            <div class="card-body">
+                                <div class="row" id="macro-container">
+                                    <div class="col-12 text-center">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="row">
                     <div class="col-md-6">
                         <h3 class="mb-3"><i class="fas fa-robot"></i> AI Forecast</h3>
@@ -709,6 +722,42 @@
   </div>
 </div>
 
+<!-- DCF Modal -->
+<div class="modal fade" id="dcfModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">DCF Valuation Model</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label small">Growth Rate</label>
+                <input type="number" id="dcf-growth" class="form-control form-control-sm" value="0.10" step="0.01">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Discount Rate</label>
+                <input type="number" id="dcf-discount" class="form-control form-control-sm" value="0.10" step="0.01">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Term. Growth</label>
+                <input type="number" id="dcf-term" class="form-control form-control-sm" value="0.03" step="0.01">
+            </div>
+        </div>
+        <button class="btn btn-primary w-100 mb-3" onclick="calculateDCF()">Calculate Fair Value</button>
+
+        <div id="dcf-result" class="alert alert-light border text-center" style="display: none;">
+            <h3 id="dcf-fair-value"></h3>
+            <span id="dcf-upside"></span>
+            <hr>
+            <small class="text-muted">Based on FCF: <span id="dcf-fcf-used"></span></small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Risk Analysis Modal -->
 <div class="modal fade" id="riskModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -834,6 +883,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div class="d-flex justify-content-end mb-3">
+            <button class="btn btn-sm btn-outline-success" onclick="showDCFModal()"><i class="fas fa-calculator"></i> DCF Valuation</button>
+        </div>
         <div class="row mb-3">
             <div class="col-md-3">
                 <div class="card bg-light">
@@ -1530,6 +1582,77 @@
         loadPatterns();
         loadMarketSentiment();
         loadCryptoSentiment();
+        loadMacro();
+    }
+
+    function loadMacro() {
+        const container = document.getElementById('macro-container');
+        fetch(`${API_BASE_URL}/api/beta/macro`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data || data.length === 0) {
+                    container.innerHTML = '<div class="col-12 text-center text-muted">Macro data unavailable.</div>';
+                    return;
+                }
+                container.innerHTML = '';
+                data.forEach(item => {
+                    const color = item.change_pct >= 0 ? 'text-success' : 'text-danger';
+                    const icon = item.change_pct >= 0 ? 'fa-caret-up' : 'fa-caret-down';
+                    container.innerHTML += `
+                        <div class="col-md-3 text-center border-end">
+                            <small class="text-muted">${item.name}</small>
+                            <h5 class="mb-0">${item.price.toFixed(2)}</h5>
+                            <small class="${color}"><i class="fas ${icon}"></i> ${Math.abs(item.change_pct).toFixed(2)}%</small>
+                        </div>
+                    `;
+                });
+            });
+    }
+
+    function showDCFModal() {
+        if(!currentProTicker) return;
+        const modal = new bootstrap.Modal(document.getElementById('dcfModal'));
+        document.getElementById('dcf-result').style.display = 'none';
+        modal.show();
+    }
+
+    function calculateDCF() {
+        if(!currentProTicker) return;
+        const growth = document.getElementById('dcf-growth').value;
+        const discount = document.getElementById('dcf-discount').value;
+        const term = document.getElementById('dcf-term').value;
+
+        document.getElementById('dcf-result').style.display = 'block';
+        document.getElementById('dcf-result').innerHTML = '<div class="spinner-border text-primary spinner-border-sm"></div> Calculating...';
+
+        fetch(`${API_BASE_URL}/api/beta/dcf`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ticker: currentProTicker,
+                growth_rate: growth,
+                discount_rate: discount,
+                terminal_growth: term
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.error) {
+                document.getElementById('dcf-result').innerHTML = `<div class="text-danger">${data.error}</div>`;
+                return;
+            }
+
+            const color = data.upside >= 0 ? 'text-success' : 'text-danger';
+            const sign = data.upside >= 0 ? '+' : '';
+            const fcfB = (data.parameters.fcf / 1e9).toFixed(2) + 'B';
+
+            document.getElementById('dcf-result').innerHTML = `
+                <h3>$${data.fair_value.toFixed(2)}</h3>
+                <span class="${color} fw-bold">${sign}${data.upside.toFixed(2)}% Upside</span>
+                <hr>
+                <small class="text-muted">Based on FCF: $${fcfB}</small>
+            `;
+        });
     }
 
     function loadCryptoSentiment() {

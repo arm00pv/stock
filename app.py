@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -633,6 +633,34 @@ def api_beta_crypto_sentiment():
 
     result = get_crypto_sentiment()
     return jsonify(result)
+
+@app.route('/api/beta/dcf', methods=['POST'])
+@login_required
+def api_beta_dcf():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    ticker = data.get('ticker')
+    if not ticker: return jsonify({'error': 'Ticker required'}), 400
+
+    # Parse optional params
+    try:
+        growth = float(data.get('growth_rate', 0.10))
+        discount = float(data.get('discount_rate', 0.10))
+        term = float(data.get('terminal_growth', 0.03))
+    except:
+        return jsonify({'error': 'Invalid parameters'}), 400
+
+    result = calculate_dcf(ticker, growth, discount, term)
+    return jsonify(result)
+
+@app.route('/api/beta/macro')
+@login_required
+def api_beta_macro():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_macro_summary())
 
 @app.route('/api/beta/patterns')
 @login_required

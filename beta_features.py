@@ -734,3 +734,113 @@ def run_monte_carlo_simulation(tickers, weights=None, days=90, simulations=1000)
     except Exception as e:
         logging.error(f"Monte Carlo error: {e}")
         return {"error": str(e)}
+
+def calculate_dcf(ticker, growth_rate=0.10, discount_rate=0.10, terminal_growth=0.03, years=5):
+    """
+    Performs a simplified Discounted Cash Flow (DCF) valuation.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+
+        # Get FCF
+        cf = stock.cashflow
+        if cf is None or cf.empty or 'Free Cash Flow' not in cf.index:
+            return {"error": "Free Cash Flow data not available"}
+
+        fcf_recent = cf.loc['Free Cash Flow'].iloc[0]
+        # Handle currency? yfinance usually reports in reporting currency. Price in trading currency.
+        # Assuming USD/USD for simplicity for now.
+        if pd.isna(fcf_recent): return {"error": "Recent FCF is NaN"}
+
+        # Get Shares
+        shares = stock.info.get('sharesOutstanding')
+        if not shares: return {"error": "Shares Outstanding not available"}
+
+        # Projection
+        future_fcf = []
+
+        current_fcf = fcf_recent
+        total_pv = 0
+
+        for i in range(1, years + 1):
+            projected = current_fcf * (1 + growth_rate)
+            discount_factor = (1 + discount_rate) ** i
+            pv = projected / discount_factor
+
+            future_fcf.append(projected)
+            total_pv += pv
+            current_fcf = projected
+
+        # Terminal Value
+        if discount_rate <= terminal_growth:
+            return {"error": "Discount rate must be > Terminal growth"}
+
+        terminal_val = future_fcf[-1] * (1 + terminal_growth) / (discount_rate - terminal_growth)
+        terminal_pv = terminal_val / ((1 + discount_rate) ** years)
+
+        total_equity_value = total_pv + terminal_pv
+        fair_value = total_equity_value / shares
+
+        # Current Price
+        hist = stock.history(period="1d")
+        if hist.empty: return {"error": "Price data unavailable"}
+        current_price = hist['Close'].iloc[-1]
+
+        return {
+            "ticker": ticker,
+            "current_price": round(float(current_price), 2),
+            "fair_value": round(float(fair_value), 2),
+            "upside": round(((fair_value - current_price) / current_price) * 100, 2),
+            "parameters": {
+                "fcf": float(fcf_recent),
+                "growth_rate": growth_rate,
+                "discount_rate": discount_rate,
+                "terminal_growth": terminal_growth
+            }
+        }
+
+    except Exception as e:
+        logging.error(f"DCF error for {ticker}: {e}")
+        return {"error": str(e)}
+
+def get_macro_summary():
+    """
+    Fetches commodities and currencies.
+    """
+    tickers = {
+        'Gold': 'GC=F',
+        'Oil': 'CL=F',
+        'USD Index': 'DX-Y.NYB',
+        'EUR/USD': 'EURUSD=X'
+    }
+    results = []
+    try:
+        # yf.download might fail if one ticker is bad, but these are standard
+        data = yf.download(list(tickers.values()), period="5d", progress=False)
+        if data.empty: return []
+
+        if 'Close' in data:
+            close = data['Close']
+        else:
+            close = data
+
+        for name, ticker in tickers.items():
+            if ticker not in close: continue
+            series = close[ticker].dropna()
+            if len(series) < 2: continue
+
+            price = series.iloc[-1]
+            prev = series.iloc[-2]
+            change = ((price - prev) / prev) * 100
+
+            results.append({
+                "name": name,
+                "ticker": ticker,
+                "price": round(float(price), 2),
+                "change_pct": round(float(change), 2)
+            })
+
+        return results
+    except Exception as e:
+        logging.error(f"Macro error: {e}")
+        return []
