@@ -844,3 +844,116 @@ def get_macro_summary():
     except Exception as e:
         logging.error(f"Macro error: {e}")
         return []
+
+def get_insider_sentiment(ticker):
+    """
+    Fetches recent insider transactions.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        insider = stock.insider_transactions
+        if insider is None or insider.empty:
+            return {"error": "No insider data"}
+
+        transactions = []
+        buy_val = 0.0
+        sell_val = 0.0
+
+        # Index is usually dates? Or default int index?
+        # yfinance usually returns DataFrame where Index is relevant or simple int.
+        # Let's rely on 'Start Date' column if present.
+
+        if 'Start Date' in insider.columns:
+            insider = insider.sort_values('Start Date', ascending=False)
+
+        # Take top 10 recent
+        for idx, row in insider.head(10).iterrows():
+            # Check columns availability
+            shares = row.get('Shares', 0)
+            value = row.get('Value', 0)
+
+            # Handle NaN
+            if pd.isna(shares): shares = 0
+            if pd.isna(value): value = 0
+
+            # Determine Action
+            # Often in 'Text' or 'Transaction' column?
+            # From experience, yf returns 'Text' which is descriptive.
+            text = str(row.get('Text', '')).lower()
+
+            action = "Unspecified"
+            if "sale" in text or "disposition" in text:
+                action = "SELL"
+                sell_val += float(value)
+            elif "purchase" in text or "acquisition" in text:
+                action = "BUY"
+                buy_val += float(value)
+            elif "grant" in text:
+                action = "GRANT"
+
+            # Holder name is often in the Index? Or 'Insider' column.
+            # yfinance 0.2.x often puts name in 'Insider' column.
+            holder = str(row.get('Insider', 'Unknown'))
+
+            date_val = row.get('Start Date', 'N/A')
+            if hasattr(date_val, 'strftime'):
+                date_str = date_val.strftime('%Y-%m-%d')
+            else:
+                date_str = str(date_val)
+
+            transactions.append({
+                "date": date_str,
+                "holder": holder,
+                "shares": int(shares),
+                "value": float(value),
+                "action": action
+            })
+
+        return {
+            "transactions": transactions,
+            "summary": {
+                "buy_total": round(buy_val, 2),
+                "sell_total": round(sell_val, 2),
+                "net_sentiment": "BULLISH" if buy_val > sell_val else "BEARISH"
+            }
+        }
+    except Exception as e:
+        logging.error(f"Insider error: {e}")
+        return {"error": str(e)}
+
+def get_analyst_ratings(ticker):
+    """
+    Fetches analyst recommendations breakdown.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        recs = stock.recommendations
+        if recs is None or recs.empty:
+            return {"error": "No ratings data"}
+
+        # recs is usually a DataFrame with period as index or column
+        # We want the latest period (row 0 usually)
+        latest = recs.iloc[0]
+
+        data = {
+            "strongBuy": int(latest.get('strongBuy', 0)),
+            "buy": int(latest.get('buy', 0)),
+            "hold": int(latest.get('hold', 0)),
+            "sell": int(latest.get('sell', 0)),
+            "strongSell": int(latest.get('strongSell', 0))
+        }
+
+        total = sum(data.values())
+        consensus = "N/A"
+        if total > 0:
+            # Simple max vote
+            consensus = max(data, key=data.get).replace('strong', 'Strong ').title()
+
+        return {
+            "consensus": consensus,
+            "breakdown": data,
+            "total_analysts": total
+        }
+    except Exception as e:
+        logging.error(f"Analyst error: {e}")
+        return {"error": str(e)}

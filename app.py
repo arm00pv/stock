@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary, get_insider_sentiment, get_analyst_ratings
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -661,6 +661,20 @@ def api_beta_macro():
     if not current_user.beta_active:
         return jsonify({'error': 'Beta features not active.'}), 403
     return jsonify(get_macro_summary())
+
+@app.route('/api/beta/insider/<ticker>')
+@login_required
+def api_beta_insider(ticker):
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_insider_sentiment(ticker))
+
+@app.route('/api/beta/analysts/<ticker>')
+@login_required
+def api_beta_analysts(ticker):
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_analyst_ratings(ticker))
 
 @app.route('/api/beta/patterns')
 @login_required

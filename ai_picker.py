@@ -7,8 +7,6 @@ import numpy as np
 from database import get_recently_picked_tickers, get_ai_settings
 
 logging.basicConfig(level=logging.INFO,
-                    filename='ai_picker.log',
-                    filemode='a',
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 def calculate_rsi(series, period=14):

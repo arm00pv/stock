@@ -849,6 +849,31 @@
                 </div>
             </div>
         </div>
+
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Analyst Ratings</div>
+                    <div class="card-body">
+                        <div style="height: 200px; width: 100%;">
+                            <canvas id="analystChart"></canvas>
+                        </div>
+                        <div class="text-center mt-2"><h5 id="analyst-consensus"></h5></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Insider Activity (Last 10)</div>
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                        <table class="table table-sm small" id="insider-table">
+                            <thead><tr><th>Date</th><th>Action</th><th>Shares</th><th>Value</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1984,6 +2009,7 @@
 
     // --- Correlation Matrix ---
     let proChart = null;
+    let analystChart = null;
     let currentProTicker = null;
 
     function showProDetails(ticker) {
@@ -2057,6 +2083,69 @@
                         }
                     }
                 });
+            });
+
+        // Fetch Analyst Data
+        fetch(`${API_BASE_URL}/api/beta/analysts/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data.error) {
+                    document.getElementById('analyst-consensus').innerText = `Consensus: ${data.consensus}`;
+
+                    const ctx = document.getElementById('analystChart').getContext('2d');
+                    if(analystChart) analystChart.destroy();
+
+                    analystChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Strong Buy', 'Buy', 'Hold', 'Sell', 'Strong Sell'],
+                            datasets: [{
+                                label: 'Analysts',
+                                data: [
+                                    data.breakdown.strongBuy,
+                                    data.breakdown.buy,
+                                    data.breakdown.hold,
+                                    data.breakdown.sell,
+                                    data.breakdown.strongSell
+                                ],
+                                backgroundColor: [
+                                    '#198754', '#20c997', '#ffc107', '#fd7e14', '#dc3545'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                        }
+                    });
+                }
+            });
+
+        // Fetch Insider Data
+        const insiderTbody = document.getElementById('insider-table').querySelector('tbody');
+        insiderTbody.innerHTML = '<tr><td colspan="4" class="text-center">Loading...</td></tr>';
+
+        fetch(`${API_BASE_URL}/api/beta/insider/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                insiderTbody.innerHTML = '';
+                if(!data.error && data.transactions.length > 0) {
+                    data.transactions.forEach(t => {
+                        const color = t.action === 'BUY' ? 'text-success' : (t.action === 'SELL' ? 'text-danger' : 'text-muted');
+                        insiderTbody.innerHTML += `
+                            <tr>
+                                <td>${t.date}</td>
+                                <td class="${color} fw-bold">${t.action}</td>
+                                <td>${t.shares.toLocaleString()}</td>
+                                <td>$${t.value.toLocaleString()}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    insiderTbody.innerHTML = '<tr><td colspan="4" class="text-center">No recent activity.</td></tr>';
+                }
             });
 
         loadSentiment(ticker);
