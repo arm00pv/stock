@@ -4,6 +4,7 @@ import numpy as np
 import logging
 import requests
 from scipy.optimize import minimize
+from scipy.signal import find_peaks
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from database import get_db_connection
 from sp500_list import SP500_TICKERS
@@ -1121,4 +1122,192 @@ def get_options_data(ticker):
 
     except Exception as e:
         logging.error(f"Options error for {ticker}: {e}")
+        return {"error": str(e)}
+
+def get_sector_rotation():
+    """
+    Calculates Sector Rotation metrics (Trend vs Momentum) relative to SPY.
+    """
+    sectors = {
+        'XLE': 'Energy', 'XLF': 'Financials', 'XLK': 'Tech', 'XLV': 'Health',
+        'XLI': 'Industrials', 'XLP': 'Staples', 'XLY': 'Discretionary',
+        'XLB': 'Materials', 'XLU': 'Utilities', 'XLRE': 'Real Estate', 'XLC': 'Comm'
+    }
+    try:
+        tickers = list(sectors.keys()) + ['SPY']
+        data = yf.download(tickers, period="6mo", progress=False)
+        if data.empty: return []
+
+        if 'Close' in data:
+            close = data['Close']
+        else:
+            close = data
+
+        if 'SPY' not in close: return []
+
+        spy = close['SPY']
+        results = []
+
+        for ticker, name in sectors.items():
+            if ticker not in close: continue
+
+            series = close[ticker].dropna()
+            # Align with SPY
+            common_idx = series.index.intersection(spy.index)
+            if len(common_idx) < 60: continue
+
+            s_price = series.loc[common_idx]
+            m_price = spy.loc[common_idx]
+
+            rs = s_price / m_price
+
+            # Trend: RS vs 60-day MA of RS
+            ma_rs = rs.rolling(window=60).mean()
+            curr_rs = rs.iloc[-1]
+            curr_ma = ma_rs.iloc[-1]
+
+            # Momentum: ROC of RS (10 days)
+            prev_rs = rs.iloc[-10] if len(rs) > 10 else rs.iloc[0]
+
+            x_trend = ((curr_rs / curr_ma) - 1) * 100 if curr_ma > 0 else 0
+            y_mom = ((curr_rs - prev_rs) / prev_rs) * 100 if prev_rs > 0 else 0
+
+            # Quadrant
+            quad = ""
+            if x_trend > 0 and y_mom > 0: quad = "Leading"
+            elif x_trend > 0 and y_mom < 0: quad = "Weakening"
+            elif x_trend < 0 and y_mom < 0: quad = "Lagging"
+            else: quad = "Improving"
+
+            results.append({
+                "ticker": ticker,
+                "name": name,
+                "x": round(x_trend, 2),
+                "y": round(y_mom, 2),
+                "quadrant": quad
+            })
+
+        return results
+    except Exception as e:
+        logging.error(f"Sector rotation error: {e}")
+        return []
+
+def get_advanced_patterns():
+    """
+    Scans for Double Top/Bottom patterns on a subset of stocks.
+    """
+    tickers = SP500_TICKERS[:50] # Limit to top 50 for performance
+    patterns = []
+
+    try:
+        data = yf.download(tickers, period="6mo", progress=False)
+        if data.empty: return []
+
+        if 'Close' in data:
+            close = data['Close']
+        else:
+            close = data
+
+        for ticker in tickers:
+            if ticker not in close: continue
+            series = close[ticker].dropna()
+            if len(series) < 50: continue
+
+            arr = series.values
+            peaks, _ = find_peaks(arr, distance=10)
+            troughs, _ = find_peaks(-arr, distance=10)
+
+            # Double Top
+            if len(peaks) >= 2:
+                p1, p2 = peaks[-2], peaks[-1]
+                v1, v2 = arr[p1], arr[p2]
+                # Peaks should be similar height (within 2%)
+                if abs(v1 - v2) / v1 < 0.02:
+                    # Check for trough in between
+                    mid_slice = arr[p1:p2]
+                    if len(mid_slice) > 0:
+                        min_val = mid_slice.min()
+                        # Drop from peak should be significant (>3%)
+                        if (v1 - min_val) / v1 > 0.03:
+                            patterns.append({"ticker": ticker, "pattern": "Double Top", "price": float(arr[-1])})
+
+            # Double Bottom
+            if len(troughs) >= 2:
+                t1, t2 = troughs[-2], troughs[-1]
+                v1, v2 = arr[t1], arr[t2]
+                if abs(v1 - v2) / v1 < 0.02:
+                    mid_slice = arr[t1:t2]
+                    if len(mid_slice) > 0:
+                        max_val = mid_slice.max()
+                        if (max_val - v1) / v1 > 0.03:
+                            patterns.append({"ticker": ticker, "pattern": "Double Bottom", "price": float(arr[-1])})
+
+    except Exception as e:
+        logging.error(f"Advanced pattern error: {e}")
+
+    return patterns
+
+def generate_trade_thesis(ticker):
+    """
+    Synthesizes a trade thesis based on aggregated data.
+    """
+    try:
+        f_score = calculate_piotroski_f_score(ticker)
+        insider = get_insider_sentiment(ticker)
+        analyst = get_analyst_ratings(ticker)
+
+        # Determine Sentiment
+        bullish_signals = 0
+        bearish_signals = 0
+        reasons = []
+
+        # F-Score
+        if not f_score.get('error'):
+            fs = f_score.get('score', 0)
+            if fs >= 7:
+                bullish_signals += 1
+                reasons.append(f"Strong Fundamentals (F-Score {fs}/9).")
+            elif fs <= 3:
+                bearish_signals += 1
+                reasons.append(f"Weak Fundamentals (F-Score {fs}/9).")
+
+        # Insider
+        if not insider.get('error'):
+            net_insider = insider.get('summary', {}).get('net_sentiment', 'NEUTRAL')
+            if net_insider == 'BULLISH':
+                bullish_signals += 1
+                reasons.append("Insiders are buying.")
+            elif net_insider == 'BEARISH':
+                bearish_signals += 1
+                reasons.append("Insiders are selling.")
+
+        # Analyst
+        if not analyst.get('error'):
+            consensus = analyst.get('consensus', '').lower()
+            if 'buy' in consensus:
+                bullish_signals += 1
+                reasons.append(f"Analysts rate it {analyst['consensus']}.")
+            elif 'sell' in consensus:
+                bearish_signals += 1
+                reasons.append(f"Analysts rate it {analyst['consensus']}.")
+
+        # Conclusion
+        if bullish_signals > bearish_signals:
+            verdict = "BULLISH"
+            color = "success"
+        elif bearish_signals > bullish_signals:
+            verdict = "BEARISH"
+            color = "danger"
+        else:
+            verdict = "NEUTRAL"
+            color = "warning"
+
+        text = f"The AI Thesis is <strong>{verdict}</strong>. "
+        text += " ".join(reasons)
+        if not reasons: text += "Mixed signals or insufficient data."
+
+        return {"verdict": verdict, "thesis": text, "color": color}
+
+    except Exception as e:
+        logging.error(f"Thesis error: {e}")
         return {"error": str(e)}
