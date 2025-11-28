@@ -957,3 +957,168 @@ def get_analyst_ratings(ticker):
     except Exception as e:
         logging.error(f"Analyst error: {e}")
         return {"error": str(e)}
+
+def calculate_piotroski_f_score(ticker):
+    """
+    Calculates the Piotroski F-Score (0-9) for financial health.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        bs = stock.balance_sheet
+        inc = stock.income_stmt
+        cf = stock.cashflow
+
+        if bs is None or inc is None or cf is None or bs.empty or inc.empty or cf.empty:
+            return {"error": "Financial data unavailable"}
+
+        # Helper to safely get value at index i
+        def get_val(df, field, i):
+            if field in df.index and len(df.columns) > i:
+                val = df.loc[field].iloc[i]
+                return float(val) if not pd.isna(val) else 0.0
+            return 0.0
+
+        # Current (0) and Previous (1)
+        net_income = get_val(inc, 'Net Income', 0)
+        total_assets = get_val(bs, 'Total Assets', 0)
+        prev_assets = get_val(bs, 'Total Assets', 1)
+
+        cfo = get_val(cf, 'Operating Cash Flow', 0)
+        if cfo == 0: cfo = get_val(cf, 'Cash Flow From Continuing Operating Activities', 0)
+
+        prev_net_income = get_val(inc, 'Net Income', 1)
+
+        # 1. ROA > 0
+        score_roa = 1 if (total_assets > 0 and net_income / total_assets > 0) else 0
+
+        # 2. CFO > 0
+        score_cfo = 1 if cfo > 0 else 0
+
+        # 3. Delta ROA
+        roa_curr = net_income / total_assets if total_assets > 0 else 0
+        roa_prev = prev_net_income / prev_assets if prev_assets > 0 else 0
+        score_delta_roa = 1 if roa_curr > roa_prev else 0
+
+        # 4. Accrual (CFO > Net Income)
+        score_accrual = 1 if cfo > net_income else 0
+
+        # Leverage
+        lt_debt = get_val(bs, 'Long Term Debt', 0)
+        prev_lt_debt = get_val(bs, 'Long Term Debt', 1)
+        lev_curr = lt_debt / total_assets if total_assets > 0 else 0
+        lev_prev = prev_lt_debt / prev_assets if prev_assets > 0 else 0
+        score_leverage = 1 if lev_curr <= lev_prev else 0
+
+        # Liquidity
+        curr_assets = get_val(bs, 'Current Assets', 0)
+        curr_liab = get_val(bs, 'Current Liabilities', 0)
+        prev_curr_assets = get_val(bs, 'Current Assets', 1)
+        prev_curr_liab = get_val(bs, 'Current Liabilities', 1)
+        cr_curr = curr_assets / curr_liab if curr_liab > 0 else 0
+        cr_prev = prev_curr_assets / prev_curr_liab if prev_curr_liab > 0 else 0
+        score_liquidity = 1 if cr_curr > cr_prev else 0
+
+        # Dilution
+        shares = get_val(bs, 'Ordinary Shares Number', 0)
+        if shares == 0: shares = get_val(bs, 'Share Issued', 0)
+        prev_shares = get_val(bs, 'Ordinary Shares Number', 1)
+        if prev_shares == 0: prev_shares = get_val(bs, 'Share Issued', 1)
+        score_dilution = 1 if (prev_shares > 0 and shares <= prev_shares) else 0
+
+        # Efficiency
+        gross_profit = get_val(inc, 'Gross Profit', 0)
+        revenue = get_val(inc, 'Total Revenue', 0)
+        prev_gross_profit = get_val(inc, 'Gross Profit', 1)
+        prev_revenue = get_val(inc, 'Total Revenue', 1)
+
+        margin_curr = gross_profit / revenue if revenue > 0 else 0
+        margin_prev = prev_gross_profit / prev_revenue if prev_revenue > 0 else 0
+        score_margin = 1 if margin_curr > margin_prev else 0
+
+        turnover_curr = revenue / total_assets if total_assets > 0 else 0
+        turnover_prev = prev_revenue / prev_assets if prev_assets > 0 else 0
+        score_turnover = 1 if turnover_curr > turnover_prev else 0
+
+        total_score = (score_roa + score_cfo + score_delta_roa + score_accrual +
+                       score_leverage + score_liquidity + score_dilution +
+                       score_margin + score_turnover)
+
+        return {
+            "score": total_score,
+            "breakdown": {
+                "ROA Positive": bool(score_roa),
+                "CFO Positive": bool(score_cfo),
+                "ROA Improving": bool(score_delta_roa),
+                "Quality Earnings": bool(score_accrual),
+                "Lower Leverage": bool(score_leverage),
+                "Higher Liquidity": bool(score_liquidity),
+                "No Dilution": bool(score_dilution),
+                "Margin Expanding": bool(score_margin),
+                "Turnover Improving": bool(score_turnover)
+            }
+        }
+    except Exception as e:
+        logging.error(f"F-Score error for {ticker}: {e}")
+        return {"error": str(e)}
+
+def get_options_data(ticker):
+    """
+    Fetches basic options data (Put/Call Ratio, Max Pain).
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        dates = stock.options
+        if not dates:
+            return {"error": "No options data"}
+
+        expiry = dates[0]
+        chain = stock.option_chain(expiry)
+
+        calls = chain.calls
+        puts = chain.puts
+
+        if calls.empty or puts.empty:
+             return {"error": "Incomplete chain"}
+
+        call_vol = calls['volume'].fillna(0).sum()
+        put_vol = puts['volume'].fillna(0).sum()
+        call_oi = calls['openInterest'].fillna(0).sum()
+        put_oi = puts['openInterest'].fillna(0).sum()
+
+        pc_ratio_vol = put_vol / call_vol if call_vol > 0 else 0
+        pc_ratio_oi = put_oi / call_oi if call_oi > 0 else 0
+
+        # Max Pain
+        strikes = set(calls['strike']).union(set(puts['strike']))
+        min_payout = float('inf')
+        max_pain = 0
+
+        # Optimize: only check strikes with significant OI? No, iterate all.
+        for k in strikes:
+            # Call ITM if S > K (Payout S - K) -> Holder gains if S > K.
+            # If price ends at P.
+            # Call Value = max(0, P - K).
+            # Put Value = max(0, K - P).
+            # Total Payout = Sum(OI_call * max(0, P - K_call)) + Sum(OI_put * max(0, K_put - P))
+            # Here P is the 'k' we are testing.
+
+            c_payout = calls.apply(lambda r: max(0, k - r['strike']) * (r['openInterest'] or 0), axis=1).sum()
+            p_payout = puts.apply(lambda r: max(0, r['strike'] - k) * (r['openInterest'] or 0), axis=1).sum()
+
+            total = c_payout + p_payout
+            if total < min_payout:
+                min_payout = total
+                max_pain = k
+
+        return {
+            "expiry": expiry,
+            "put_call_vol": round(pc_ratio_vol, 2),
+            "put_call_oi": round(pc_ratio_oi, 2),
+            "max_pain": max_pain,
+            "total_call_vol": int(call_vol),
+            "total_put_vol": int(put_vol)
+        }
+
+    except Exception as e:
+        logging.error(f"Options error for {ticker}: {e}")
+        return {"error": str(e)}

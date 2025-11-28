@@ -26,6 +26,42 @@
                 </div>
             </div>
         </div>
+
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Fundamental Health (Piotroski F-Score)</div>
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <h1 id="f-score-val" class="display-4 fw-bold">--</h1>
+                            <span id="f-score-text" class="badge bg-secondary">Loading...</span>
+                        </div>
+                        <ul class="list-group list-group-flush small" id="f-score-list"></ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Options Sentiment (Nearest Expiry)</div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Expiry:</span> <strong id="opt-expiry">--</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Put/Call Ratio (Vol):</span> <strong id="opt-pc-vol">--</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Put/Call Ratio (OI):</span> <strong id="opt-pc-oi">--</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Max Pain Strike:</span> <strong id="opt-max-pain" class="text-danger">--</strong>
+                        </div>
+                        <hr>
+                        <small class="text-muted">High P/C Ratio (>1) suggests bearish sentiment (hedging).</small>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -2146,6 +2182,49 @@
                 } else {
                     insiderTbody.innerHTML = '<tr><td colspan="4" class="text-center">No recent activity.</td></tr>';
                 }
+            });
+
+        // Fundamentals
+        fetch(`${API_BASE_URL}/api/beta/fundamentals/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    document.getElementById('f-score-val').innerText = 'N/A';
+                    return;
+                }
+                const score = data.score;
+                document.getElementById('f-score-val').innerText = score;
+
+                let color = 'secondary';
+                let text = 'Unknown';
+                if(score >= 8) { color = 'success'; text = 'Very Strong'; }
+                else if(score >= 7) { color = 'success'; text = 'Strong'; }
+                else if(score >= 5) { color = 'warning'; text = 'Average'; }
+                else if(score >= 3) { color = 'warning'; text = 'Weak'; }
+                else { color = 'danger'; text = 'Poor'; }
+
+                document.getElementById('f-score-text').innerText = text;
+                document.getElementById('f-score-text').className = `badge bg-${color}`;
+                document.getElementById('f-score-val').className = `display-4 fw-bold text-${color}`;
+
+                const list = document.getElementById('f-score-list');
+                list.innerHTML = '';
+                for(const [key, passed] of Object.entries(data.breakdown)) {
+                    const icon = passed ? 'check text-success' : 'times text-danger';
+                    list.innerHTML += `<li class="list-group-item d-flex justify-content-between"><span>${key}</span><i class="fas fa-${icon}"></i></li>`;
+                }
+            });
+
+        // Options
+        fetch(`${API_BASE_URL}/api/beta/options/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) return;
+
+                document.getElementById('opt-expiry').innerText = data.expiry;
+                document.getElementById('opt-pc-vol').innerText = data.put_call_vol;
+                document.getElementById('opt-pc-oi').innerText = data.put_call_oi;
+                document.getElementById('opt-max-pain').innerText = '$' + data.max_pain;
             });
 
         loadSentiment(ticker);
