@@ -3,6 +3,17 @@
 {% block title %}Dashboard - Portfolio Analyzer{% endblock %}
 
 {% block content %}
+<!-- Ad Banner -->
+{% if not current_user.beta_active %}
+<div class="container-fluid bg-light border-bottom mb-3 py-2">
+    <div class="text-center">
+        <span class="badge bg-secondary me-2">Ad</span>
+        <strong>Unlock the full power of AI Investing.</strong>
+        <a href="#" onclick="document.getElementById('settings-tab').click(); return false;" class="text-decoration-none fw-bold ms-2">Upgrade to Beta <i class="fas fa-arrow-right"></i></a>
+    </div>
+</div>
+{% endif %}
+
 <!-- Market Status Ticker -->
 <div class="row mb-4" id="market-status-container">
     <div class="col-12 text-center">
@@ -23,6 +34,40 @@
             <div class="card-body p-0">
                 <div style="height: 150px; width: 100%;">
                     <canvas id="sectorChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Top Institutional Holders</div>
+                    <div class="table-responsive" style="max-height: 200px;">
+                        <table class="table table-sm small" id="inst-table">
+                            <thead><tr><th>Holder</th><th>Shares</th><th>Date</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">Short Interest</div>
+                    <div class="card-body text-center">
+                        <h3 id="short-pct">--</h3>
+                        <small class="text-muted">Short % of Float</small>
+                        <hr>
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Short Ratio</strong><br>
+                                <span id="short-ratio">--</span>
+                            </div>
+                            <div class="col-6">
+                                <strong>Shares Short</strong><br>
+                                <span id="short-shares">--</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -62,6 +107,16 @@
                 </div>
             </div>
         </div>
+        {% if not current_user.beta_active %}
+        <div class="card mt-3 bg-light border-warning">
+            <div class="card-body text-center">
+                <span class="badge bg-warning text-dark mb-2">Ad</span>
+                <h6><i class="fas fa-rocket"></i> Boost Your Portfolio</h6>
+                <p class="small text-muted mb-2">Get AI Predictions, Insider Data, and more with Beta access.</p>
+                <button class="btn btn-outline-dark btn-sm w-100" onclick="document.getElementById('settings-tab').click()">Enable Beta</button>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -2316,7 +2371,53 @@
                 document.getElementById('opt-max-pain').innerText = '$' + data.max_pain;
             });
 
+        loadOwnership(ticker);
         loadSentiment(ticker);
+    }
+
+    function loadOwnership(ticker) {
+        const tbody = document.getElementById('inst-table').querySelector('tbody');
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+
+        document.getElementById('short-pct').innerText = '--';
+        document.getElementById('short-ratio').innerText = '--';
+        document.getElementById('short-shares').innerText = '--';
+
+        fetch(`${API_BASE_URL}/api/beta/ownership/${ticker}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.error) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center">Error loading data.</td></tr>';
+                    return;
+                }
+
+                // Inst
+                tbody.innerHTML = '';
+                if(data.institutional_holders && data.institutional_holders.length > 0) {
+                    data.institutional_holders.forEach(h => {
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="text-truncate" style="max-width: 150px;" title="${h.holder}">${h.holder}</td>
+                                <td>${h.shares.toLocaleString()}</td>
+                                <td>${h.date}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center">No data available.</td></tr>';
+                }
+
+                // Short
+                const short = data.short_interest;
+                if(short) {
+                    document.getElementById('short-pct').innerText = short.shortPercentOfFloat !== 'N/A' ? short.shortPercentOfFloat + '%' : 'N/A';
+                    document.getElementById('short-ratio').innerText = short.shortRatio;
+                    document.getElementById('short-shares').innerText = typeof short.sharesShort === 'number' ? short.sharesShort.toLocaleString() : short.sharesShort;
+
+                    if(short.shortPercentOfFloat > 20) document.getElementById('short-pct').className = 'text-danger fw-bold';
+                    else document.getElementById('short-pct').className = '';
+                }
+            });
     }
 
     function loadSentiment(ticker) {

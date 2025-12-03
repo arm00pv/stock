@@ -1311,3 +1311,56 @@ def generate_trade_thesis(ticker):
     except Exception as e:
         logging.error(f"Thesis error: {e}")
         return {"error": str(e)}
+
+def get_ownership_data(ticker):
+    """
+    Fetches Institutional Holders and Short Interest data.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+
+        # Institutional Holders
+        inst_holders = []
+        try:
+            ih = stock.institutional_holders
+            if ih is not None and not ih.empty:
+                # Take top 5
+                top_5 = ih.head(5)
+                for _, row in top_5.iterrows():
+                    holder = row.get('Holder', 'N/A')
+                    shares = row.get('Shares', 0)
+                    date_val = row.get('Date Reported', 'N/A')
+
+                    if hasattr(date_val, 'strftime'):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val)
+
+                    inst_holders.append({
+                        "holder": str(holder),
+                        "shares": int(shares) if not pd.isna(shares) else 0,
+                        "date": date_str
+                    })
+        except Exception as e:
+            logging.error(f"Inst holders fetch error: {e}")
+
+        # Short Interest
+        short_data = {}
+        try:
+            info = stock.info
+            short_float = info.get('shortPercentOfFloat')
+            short_data = {
+                "shortPercentOfFloat": round(short_float * 100, 2) if short_float else "N/A",
+                "shortRatio": info.get('shortRatio', "N/A"),
+                "sharesShort": info.get('sharesShort', "N/A")
+            }
+        except Exception as e:
+            logging.error(f"Short info fetch error: {e}")
+
+        return {
+            "institutional_holders": inst_holders,
+            "short_interest": short_data
+        }
+    except Exception as e:
+        logging.error(f"Ownership error for {ticker}: {e}")
+        return {"error": str(e)}
