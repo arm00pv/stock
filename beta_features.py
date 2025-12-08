@@ -5,6 +5,7 @@ import logging
 import requests
 from scipy.optimize import minimize
 from scipy.signal import find_peaks
+from sklearn.ensemble import IsolationForest
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from database import get_db_connection
 from sp500_list import SP500_TICKERS
@@ -1364,3 +1365,65 @@ def get_ownership_data(ticker):
     except Exception as e:
         logging.error(f"Ownership error for {ticker}: {e}")
         return {"error": str(e)}
+
+def detect_market_anomalies():
+    """
+    Detects anomalous market behavior (Unusual Volume/Price action) using Isolation Forest.
+    """
+    tickers = SP500_TICKERS[:50] # Top 50
+    anomalies = []
+
+    try:
+        data = yf.download(tickers, period="30d", progress=False)
+        if data.empty: return []
+
+        if 'Close' in data:
+            close = data['Close']
+            volume = data['Volume'] if 'Volume' in data else None
+        else:
+            close = data
+            volume = None
+
+        features = []
+        valid_tickers = []
+        meta = []
+
+        for ticker in tickers:
+            if ticker not in close: continue
+
+            c = close[ticker].dropna()
+            if len(c) < 30: continue
+
+            ret = c.pct_change().iloc[-1]
+
+            vol_ratio = 1.0
+            if volume is not None and ticker in volume:
+                v = volume[ticker].dropna()
+                if not v.empty:
+                    vol_ratio = v.iloc[-1] / v.mean() if v.mean() > 0 else 1.0
+
+            features.append([ret, vol_ratio])
+            valid_tickers.append(ticker)
+            meta.append({'price': c.iloc[-1]})
+
+        if len(features) < 5: return []
+
+        X = np.array(features)
+        # Contamination 0.1 = top 10%
+        clf = IsolationForest(contamination=0.1, random_state=42)
+        preds = clf.fit_predict(X)
+
+        for i, pred in enumerate(preds):
+            if pred == -1: # Outlier
+                anomalies.append({
+                    "ticker": valid_tickers[i],
+                    "price": float(meta[i]['price']),
+                    "return_pct": round(features[i][0] * 100, 2),
+                    "vol_ratio": round(features[i][1], 2),
+                    "reason": "Unusual Price/Volume Behavior"
+                })
+
+    except Exception as e:
+        logging.error(f"Anomaly detection error: {e}")
+
+    return anomalies
