@@ -37,7 +37,7 @@ def calculate_sell_score(ticker, current_score):
         logging.error(f"Error calculating sell score for {ticker}: {e}")
         return current_score
 
-def get_market_sentiment():
+def get_simple_market_sentiment():
     """
     Analyzes the overall market sentiment.
     """
@@ -56,7 +56,7 @@ def manage_ai_portfolio():
     portfolio_name = 'ai_guided_portfolio'
     holdings = get_portfolio_holdings(portfolio_name)
 
-    market_sentiment = get_market_sentiment()
+    market_sentiment = get_simple_market_sentiment()
     # Adjust sell threshold based on market sentiment
     sell_threshold = 0.4 - (market_sentiment * 0.1) # More aggressive selling in a bear market
 
@@ -99,7 +99,7 @@ def audit_portfolio(portfolio_name):
     holdings = get_portfolio_holdings(portfolio_name)
     audit_report = []
 
-    market_sentiment = get_market_sentiment()
+    market_sentiment = get_simple_market_sentiment()
     sell_threshold = 0.4 - (market_sentiment * 0.1)
 
     for holding in holdings:

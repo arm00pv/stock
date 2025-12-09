@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import logging
 import requests
+import re
+from collections import Counter
 from scipy.optimize import minimize
 from scipy.signal import find_peaks
 from sklearn.ensemble import IsolationForest
@@ -1427,3 +1429,70 @@ def detect_market_anomalies():
         logging.error(f"Anomaly detection error: {e}")
 
     return anomalies
+
+def get_efficient_frontier(tickers, num_portfolios=200):
+    try:
+        if len(tickers) < 2: return {"error": "Need 2+ assets"}
+
+        data = yf.download(tickers, period="1y", progress=False)
+        if data.empty: return {"error": "No data"}
+
+        if 'Close' in data:
+            prices = data['Close']
+        else:
+            prices = data
+
+        returns = prices.pct_change().dropna()
+        if returns.empty: return {"error": "Insufficient data"}
+
+        mean_returns = returns.mean()
+        cov_matrix = returns.cov()
+        num_assets = len(tickers)
+        rf = 0.04
+
+        results = []
+
+        for _ in range(num_portfolios):
+            weights = np.random.random(num_assets)
+            weights /= np.sum(weights)
+
+            p_ret = np.sum(mean_returns * weights) * 252
+            p_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights))) * np.sqrt(252)
+            p_sharpe = (p_ret - rf) / p_vol
+
+            results.append({
+                "x": round(p_vol * 100, 2), # Volatility
+                "y": round(p_ret * 100, 2), # Return
+                "sharpe": round(p_sharpe, 2)
+            })
+
+        return results
+    except Exception as e:
+        logging.error(f"Frontier error: {e}")
+        return {"error": str(e)}
+
+def get_trending_topics():
+    try:
+        tickers = ['SPY', 'QQQ', 'DIA', 'AAPL', 'NVDA', 'TSLA', 'AMZN', 'MSFT', 'GOOGL', 'META']
+        all_text = ""
+
+        for ticker in tickers:
+            t = yf.Ticker(ticker)
+            news = t.news
+            if news:
+                for item in news:
+                    all_text += " " + item.get('title', '')
+
+        words = re.findall(r'\w+', all_text.lower())
+        stop_words = {'the', 'a', 'an', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'is', 'and', 'or', 'by', 'from', 'up', 'down', 'stocks', 'stock', 'market', 'markets', 'today', 'week', 'year', 'why', 'what', 'how', 'new', 'news', 'are', 'be', 'as', 'that', 'it', 'its', 'will', 'has', 'have', 'inc', 'corp', 'company', 'earnings', 'report', 'results', 'quarter', 'q1', 'q2', 'q3', 'q4', 'price', 'target', 'buy', 'sell', 'rating', 'analyst', 'analysts', 'estimates', 'revenue', 'profit', 'sales', 'growth', 'share', 'shares', 'investor', 'investors', 'trading', 'trade', 'volume', 'high', 'low', 'close', 'open', 'vs', 'record', 'hit', 'hits', 'continues', 'continue', 'stock', 'stocks'}
+
+        filtered = [w for w in words if w not in stop_words and len(w) > 2 and not w.isdigit()]
+
+        counts = Counter(filtered)
+        top = counts.most_common(20)
+
+        return [{"text": w, "weight": c} for w, c in top]
+
+    except Exception as e:
+        logging.error(f"Topics error: {e}")
+        return []

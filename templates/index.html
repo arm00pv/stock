@@ -39,6 +39,16 @@
         </div>
 
         <div class="row mt-3">
+            <div class="col-12">
+                <h6>Efficient Frontier Simulation</h6>
+                <div style="height: 300px; width: 100%;">
+                    <canvas id="frontierChart"></canvas>
+                </div>
+                <small class="text-muted text-center d-block">Risk (Volatility) vs Return. Simulated portfolios.</small>
+            </div>
+        </div>
+
+        <div class="row mt-3">
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-header">Top Institutional Holders</div>
@@ -326,13 +336,21 @@
                 </div>
 
                 <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="card">
+                    <div class="col-md-8">
+                        <div class="card h-100">
                             <div class="card-header"><i class="fas fa-globe"></i> Global Markets</div>
                             <div class="card-body">
                                 <div class="row" id="macro-container">
                                     <div class="col-12 text-center">Loading...</div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header"><i class="fas fa-hashtag"></i> Trending Topics</div>
+                            <div class="card-body">
+                                <div id="topics-cloud" class="d-flex flex-wrap gap-2 justify-content-center">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -1731,6 +1749,25 @@
         loadMacro();
         loadSectorRotation();
         loadAnomalies();
+        loadTrendingTopics();
+    }
+
+    function loadTrendingTopics() {
+        const cloud = document.getElementById('topics-cloud');
+        fetch(`${API_BASE_URL}/api/beta/trending-topics`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data || data.length === 0) {
+                    cloud.innerHTML = 'No trending data.';
+                    return;
+                }
+                cloud.innerHTML = '';
+                const maxW = Math.max(...data.map(d => d.weight));
+                data.forEach(t => {
+                    const size = Math.ceil((t.weight / maxW) * 4) + 1;
+                    cloud.innerHTML += `<span class="badge bg-light text-dark border" style="font-size: ${0.8 + (size*0.1)}rem">${t.text}</span>`;
+                });
+            });
     }
 
     function loadAnomalies() {
@@ -2591,6 +2628,7 @@
     }
 
     // --- Optimization ---
+    let frontierChart = null;
     function optimizeSimulatorPortfolio() {
         fetch(`${API_BASE_URL}/api/personal/portfolio`)
             .then(res => res.json())
@@ -2606,6 +2644,7 @@
 
                 const tickers = data.holdings.map(h => h.ticker);
 
+                // 1. Mean-Variance Optimization
                 fetch(`${API_BASE_URL}/api/beta/optimize`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2627,7 +2666,6 @@
                     const tbody = document.getElementById('optimize-table').querySelector('tbody');
                     tbody.innerHTML = '';
 
-                    // Prepare chart data
                     const labels = [];
                     const values = [];
 
@@ -2638,12 +2676,6 @@
                     }
 
                     const ctx = document.getElementById('optimizeChart').getContext('2d');
-                    // Destroy old chart if exists (global ref problem, need to store on element or variable)
-                    // Simplest hack: Recreate canvas
-                    // Actually we use different IDs for charts so it's okay if modal is destroyed?
-                    // No, Chart instance stays attached.
-                    // Let's assume simple usage or replace canvas content.
-
                     new Chart(ctx, {
                         type: 'pie',
                         data: {
@@ -2656,6 +2688,54 @@
                             }]
                         },
                         options: { responsive: true, maintainAspectRatio: false }
+                    });
+                });
+
+                // 2. Efficient Frontier Simulation
+                fetch(`${API_BASE_URL}/api/beta/efficient-frontier`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers: tickers })
+                })
+                .then(res => res.json())
+                .then(points => {
+                    if(points.error) return;
+
+                    const ctxF = document.getElementById('frontierChart').getContext('2d');
+                    if(frontierChart) frontierChart.destroy();
+
+                    const dataPoints = points.map(p => ({x: p.x, y: p.y, sharpe: p.sharpe}));
+
+                    frontierChart = new Chart(ctxF, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: 'Portfolios',
+                                data: dataPoints,
+                                backgroundColor: (ctx) => {
+                                    const v = ctx.raw ? ctx.raw.sharpe : 0;
+                                    return v > 1.5 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(54, 162, 235, 0.6)';
+                                },
+                                pointRadius: 3
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(c) {
+                                            return `Vol: ${c.parsed.x}%, Ret: ${c.parsed.y}%, Sharpe: ${c.raw.sharpe}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { title: { display: true, text: 'Volatility (%)' } },
+                                y: { title: { display: true, text: 'Return (%)' } }
+                            }
+                        }
                     });
                 });
             });

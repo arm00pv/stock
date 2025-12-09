@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary, get_insider_sentiment, get_analyst_ratings, calculate_piotroski_f_score, get_options_data, get_sector_rotation, get_advanced_patterns, generate_trade_thesis, get_ownership_data, detect_market_anomalies
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary, get_insider_sentiment, get_analyst_ratings, calculate_piotroski_f_score, get_options_data, get_sector_rotation, get_advanced_patterns, generate_trade_thesis, get_ownership_data, detect_market_anomalies, get_efficient_frontier, get_trending_topics
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -725,6 +725,25 @@ def api_beta_anomalies():
     if not current_user.beta_active:
         return jsonify({'error': 'Beta features not active.'}), 403
     return jsonify(detect_market_anomalies())
+
+@app.route('/api/beta/efficient-frontier', methods=['POST'])
+@login_required
+def api_beta_efficient_frontier():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    tickers = data.get('tickers', [])
+    if not tickers: return jsonify({'error': 'Tickers required'}), 400
+
+    return jsonify(get_efficient_frontier(tickers))
+
+@app.route('/api/beta/trending-topics')
+@login_required
+def api_beta_trending_topics():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_trending_topics())
 
 @app.route('/api/beta/patterns')
 @login_required
