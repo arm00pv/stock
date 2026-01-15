@@ -1496,3 +1496,103 @@ def get_trending_topics():
     except Exception as e:
         logging.error(f"Topics error: {e}")
         return []
+
+def generate_rebalancing_orders(holdings, target_weights, total_equity):
+    """
+    Calculates buy/sell orders to match target weights.
+    """
+    orders = []
+    try:
+        # Create map of current holdings
+        current_holdings = {h['ticker']: h for h in holdings}
+
+        for ticker, target_pct in target_weights.items():
+            target_val = float(total_equity) * (float(target_pct) / 100.0)
+
+            # Current holding
+            holding = current_holdings.get(ticker)
+            current_shares = float(holding['shares']) if holding else 0.0
+            # If holding exists use its current price (passed from frontend/backend)
+            # If new ticker, we need price.
+            current_price = float(holding.get('current_price', holding.get('price', 0.0))) if holding else 0.0
+
+            if current_price == 0:
+                try:
+                    current_price = yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+                except:
+                    continue # Cannot trade without price
+
+            current_val = current_shares * current_price
+            diff_val = target_val - current_val
+
+            # Threshold ($10)
+            if abs(diff_val) < 10: continue
+
+            action = "BUY" if diff_val > 0 else "SELL"
+            shares = abs(diff_val) / current_price
+
+            orders.append({
+                "ticker": ticker,
+                "action": action,
+                "shares": round(shares, 4),
+                "price": round(current_price, 2),
+                "value": round(abs(diff_val), 2),
+                "target_weight": target_pct
+            })
+
+        return orders
+    except Exception as e:
+        logging.error(f"Rebalance error: {e}")
+        return []
+
+def get_yield_curve():
+    """
+    Fetches US Treasury Yields.
+    """
+    tickers = {
+        '3M': '^IRX',
+        '5Y': '^FVX',
+        '10Y': '^TNX',
+        '30Y': '^TYX'
+    }
+    try:
+        data = yf.download(list(tickers.values()), period="1d", progress=False)
+        if data.empty: return {}
+
+        if 'Close' in data:
+            prices = data['Close']
+        else:
+            prices = data
+
+        points = []
+        vals = {}
+
+        for label, ticker in tickers.items():
+            if ticker in prices.columns:
+                # yfinance might return one row dataframe
+                val = float(prices[ticker].iloc[-1])
+                vals[label] = val
+                points.append({"term": label, "yield": val})
+            elif ticker in prices.index: # If series
+                 val = float(prices[ticker])
+                 vals[label] = val
+                 points.append({"term": label, "yield": val})
+
+        # Sort
+        order = {'3M': 0, '5Y': 1, '10Y': 2, '30Y': 3}
+        points.sort(key=lambda x: order.get(x['term'], 99))
+
+        inversion = False
+        spread = 0
+        if '10Y' in vals and '3M' in vals:
+            spread = vals['10Y'] - vals['3M']
+            if spread < 0: inversion = True
+
+        return {
+            "curve": points,
+            "inverted": inversion,
+            "spread_10y_3m": round(spread, 2)
+        }
+    except Exception as e:
+        logging.error(f"Yield curve error: {e}")
+        return {}

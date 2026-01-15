@@ -49,6 +49,22 @@
         </div>
 
         <div class="row mt-3">
+            <div class="col-12">
+                <hr>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6>Rebalancing Actions</h6>
+                    <button class="btn btn-sm btn-outline-primary" onclick="generateRebalance()">Generate Orders</button>
+                </div>
+                <div class="table-responsive" id="rebalance-container" style="display: none;">
+                    <table class="table table-sm table-striped" id="rebalance-table">
+                        <thead><tr><th>Ticker</th><th>Action</th><th>Shares</th><th>Value</th><th>Target %</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
             <div class="col-md-6">
                 <div class="card h-100">
                     <div class="card-header">Top Institutional Holders</div>
@@ -397,7 +413,7 @@
                 </div>
 
                 <div class="row mt-4">
-                    <div class="col-md-12">
+                    <div class="col-md-8">
                         <h3 class="mb-3"><i class="fas fa-exclamation-triangle"></i> Market Anomalies</h3>
                         <p class="text-muted">AI-detected unusual price/volume behavior (Isolation Forest).</p>
                         <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
@@ -405,6 +421,21 @@
                                 <thead><tr><th>Ticker</th><th>Price</th><th>Return</th><th>Vol Ratio</th><th>Reason</th></tr></thead>
                                 <tbody><tr><td colspan="5" class="text-center">Scanning...</td></tr></tbody>
                             </table>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-header"><i class="fas fa-chart-line"></i> US Yield Curve</div>
+                            <div class="card-body p-2">
+                                <div style="height: 250px; width: 100%;">
+                                    <canvas id="yieldCurveChart"></canvas>
+                                </div>
+                                <div class="text-center small mt-2">
+                                    <span id="yield-status"></span>
+                                    <br>
+                                    10Y-3M Spread: <span id="yield-spread"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1750,6 +1781,88 @@
         loadSectorRotation();
         loadAnomalies();
         loadTrendingTopics();
+        loadYieldCurve();
+    }
+
+    function generateRebalance() {
+        const container = document.getElementById('rebalance-container');
+        const tbody = document.getElementById('rebalance-table').querySelector('tbody');
+
+        if(!lastOptHoldings.length || Object.keys(lastOptWeights).length === 0) {
+            alert("Please run optimization first.");
+            return;
+        }
+
+        container.style.display = 'block';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Calculating...</td></tr>';
+
+        const investedEquity = lastOptHoldings.reduce((sum, h) => sum + h.value, 0);
+
+        fetch(`${API_BASE_URL}/api/beta/rebalance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                holdings: lastOptHoldings,
+                target_weights: lastOptWeights,
+                total_equity: investedEquity
+            })
+        })
+        .then(res => res.json())
+        .then(orders => {
+            tbody.innerHTML = '';
+            if(orders.length > 0) {
+                orders.forEach(o => {
+                    const color = o.action === 'BUY' ? 'text-success' : 'text-danger';
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${o.ticker}</td>
+                            <td class="${color} fw-bold">${o.action}</td>
+                            <td>${o.shares}</td>
+                            <td>$${o.value}</td>
+                            <td>${o.target_weight}%</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Portfolio is balanced.</td></tr>';
+            }
+        });
+    }
+
+    function loadYieldCurve() {
+        fetch(`${API_BASE_URL}/api/beta/yield-curve`)
+            .then(res => res.json())
+            .then(data => {
+                if(!data.curve) return;
+
+                const ctx = document.getElementById('yieldCurveChart').getContext('2d');
+
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.curve.map(p => p.term),
+                        datasets: [{
+                            label: 'Yield %',
+                            data: data.curve.map(p => p.yield),
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.3,
+                            fill: true,
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: false } }
+                    }
+                });
+
+                const status = data.inverted ? "Inverted (Recession Signal)" : "Normal";
+                const color = data.inverted ? "text-danger" : "text-success";
+                document.getElementById('yield-status').innerHTML = `<span class="${color} fw-bold">${status}</span>`;
+                document.getElementById('yield-spread').innerText = `${data.spread_10y_3m}%`;
+            });
     }
 
     function loadTrendingTopics() {
@@ -2629,7 +2742,11 @@
 
     // --- Optimization ---
     let frontierChart = null;
+    let lastOptHoldings = [];
+    let lastOptWeights = {};
+
     function optimizeSimulatorPortfolio() {
+        document.getElementById('rebalance-container').style.display = 'none'; // Reset
         fetch(`${API_BASE_URL}/api/personal/portfolio`)
             .then(res => res.json())
             .then(data => {
@@ -2637,6 +2754,8 @@
                     alert("Need at least 2 holdings to optimize.");
                     return;
                 }
+
+                lastOptHoldings = data.holdings; // Save for rebalance
 
                 const modal = new bootstrap.Modal(document.getElementById('optimizeModal'));
                 modal.show();
@@ -2656,6 +2775,8 @@
                         document.getElementById('optimize-stats').innerText = opt.error;
                         return;
                     }
+
+                    lastOptWeights = opt.weights; // Save
 
                     document.getElementById('optimize-stats').innerHTML = `
                         <strong>Expected Return:</strong> ${opt.metrics.expected_return}% <br>
@@ -3083,7 +3204,16 @@
         if (!message) return;
 
         const messagesDiv = document.getElementById('chat-messages');
-        messagesDiv.innerHTML += `<div class="text-end mb-2"><span class="bg-primary text-white p-2 rounded d-inline-block" style="max-width: 80%;">${message}</span></div>`;
+        // Prevent XSS on user input
+        const userMsgDiv = document.createElement('div');
+        userMsgDiv.className = 'text-end mb-2';
+        const userMsgSpan = document.createElement('span');
+        userMsgSpan.className = 'bg-primary text-white p-2 rounded d-inline-block';
+        userMsgSpan.style.maxWidth = '80%';
+        userMsgSpan.innerText = message;
+        userMsgDiv.appendChild(userMsgSpan);
+        messagesDiv.appendChild(userMsgDiv);
+
         input.value = '';
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
 

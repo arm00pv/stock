@@ -24,7 +24,7 @@ from market_data import get_market_status, get_sector_performance
 from backtesting import run_backtest
 from ai_assistant import process_chat_message
 from personal_portfolio import create_portfolio, get_portfolio_status, execute_user_trade, get_leaderboard
-from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary, get_insider_sentiment, get_analyst_ratings, calculate_piotroski_f_score, get_options_data, get_sector_rotation, get_advanced_patterns, generate_trade_thesis, get_ownership_data, detect_market_anomalies, get_efficient_frontier, get_trending_topics
+from beta_features import get_smart_signals, create_price_alert, get_user_alerts, delete_price_alert, check_user_alerts, get_correlation_matrix, get_candlestick_patterns, get_advanced_ticker_details, compare_stocks, optimize_portfolio, get_earnings_calendar, get_portfolio_risk_metrics, get_market_sentiment, run_monte_carlo_simulation, get_crypto_sentiment, calculate_dcf, get_macro_summary, get_insider_sentiment, get_analyst_ratings, calculate_piotroski_f_score, get_options_data, get_sector_rotation, get_advanced_patterns, generate_trade_thesis, get_ownership_data, detect_market_anomalies, get_efficient_frontier, get_trending_topics, generate_rebalancing_orders, get_yield_curve
 from gamification import get_user_badges, check_and_award_badges
 from notifications import get_unread_notifications, mark_notification_read
 from social import get_public_profile, cast_vote, get_ticker_sentiment
@@ -744,6 +744,30 @@ def api_beta_trending_topics():
     if not current_user.beta_active:
         return jsonify({'error': 'Beta features not active.'}), 403
     return jsonify(get_trending_topics())
+
+@app.route('/api/beta/rebalance', methods=['POST'])
+@login_required
+def api_beta_rebalance():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+
+    data = request.get_json()
+    holdings = data.get('holdings', [])
+    targets = data.get('target_weights', {})
+    equity = data.get('total_equity', 0)
+
+    if not holdings or not targets:
+        return jsonify({'error': 'Missing holdings or targets'}), 400
+
+    orders = generate_rebalancing_orders(holdings, targets, equity)
+    return jsonify(orders)
+
+@app.route('/api/beta/yield-curve')
+@login_required
+def api_beta_yield_curve():
+    if not current_user.beta_active:
+        return jsonify({'error': 'Beta features not active.'}), 403
+    return jsonify(get_yield_curve())
 
 @app.route('/api/beta/patterns')
 @login_required
