@@ -1,14 +1,15 @@
 # Deployment Guide
 
-This guide describes how to deploy the Portfolio Analyzer application to a Linux web server (e.g., Ubuntu).
+This guide describes how to deploy the Portfolio Analyzer application to your existing Linux web server (Apache2).
 
 ## Prerequisites
 
-*   **Linux Server**: Ubuntu 20.04 LTS or later is recommended.
-*   **Root/Sudo Access**: You need administrative privileges on the server.
+*   **Linux Server**: Ubuntu 20.04 LTS or later.
+*   **Root/Sudo Access**: You need administrative privileges.
 *   **Git**: To clone the repository.
 *   **Python 3.8+**: The application requires Python 3.8 or newer.
 *   **MySQL Server**: The application uses a MySQL database.
+*   **Apache Modules**: Ensure `proxy`, `proxy_http`, and `headers` modules are enabled.
 
 ## Step 1: System Update & Dependencies
 
@@ -19,19 +20,20 @@ sudo apt update
 sudo apt install -y python3-pip python3-dev python3-venv build-essential libssl-dev libffi-dev python3-setuptools mysql-server libmysqlclient-dev git apache2
 ```
 
+Enable required Apache modules:
+```bash
+sudo a2enmod proxy proxy_http headers
+sudo systemctl restart apache2
+```
+
 ## Step 2: Database Setup
 
-1.  Secure your MySQL installation (optional but recommended):
-    ```bash
-    sudo mysql_secure_installation
-    ```
-
-2.  Log in to MySQL as root:
+1.  Log in to MySQL as root:
     ```bash
     sudo mysql
     ```
 
-3.  Create the database and user:
+2.  Create the database and user:
     ```sql
     CREATE DATABASE portfolio_db;
     CREATE USER 'portfolio_user'@'localhost' IDENTIFIED BY 'your_strong_password';
@@ -43,12 +45,12 @@ sudo apt install -y python3-pip python3-dev python3-venv build-essential libssl-
 
 ## Step 3: Clone the Repository
 
-Navigate to your web directory (e.g., `/var/www/`) and clone the app:
+Navigate to your web host directory and clone the app:
 
 ```bash
-cd /var/www
-sudo git clone <repository_url> portfolio_app
-cd portfolio_app
+cd /var/www/webhost
+sudo git clone <repository_url> portfolio
+cd portfolio
 sudo chown -R $USER:$USER .
 ```
 
@@ -72,7 +74,7 @@ sudo chown -R $USER:$USER .
 
 ## Step 5: Configuration
 
-1.  Create a `.env` file in the project root based on the following template:
+1.  Create a `.env` file in the project root:
 
     ```bash
     nano .env
@@ -91,11 +93,7 @@ sudo chown -R $USER:$USER .
     DB_NAME=portfolio_db
 
     # API Keys
-    # Get a free key from https://www.marketaux.com/
     MARKETAUX_API_KEY=your_marketaux_api_key
-
-    # Optional: If you changed the data loader to use an env var
-    # ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
     ```
 
 2.  **Initialize the Database**:
@@ -103,12 +101,7 @@ sudo chown -R $USER:$USER .
     ```bash
     python3 -c "from app import init_db, init_user_db; init_db(); init_user_db()"
     ```
-    *Note: If the above command fails due to import context, you can simply run `python3 app.py` for a moment and then kill it with Ctrl+C, as the `init_db` calls are at the module level or top of script.*
-
-    Better yet, populate the stock universe:
-    ```bash
-    python3 data_loader.py
-    ```
+    *Note: This creates the tables. You can also run `python3 data_loader.py` to populate initial stock data.*
 
 ## Step 6: Configure Gunicorn with Systemd
 
@@ -119,7 +112,7 @@ Create a systemd service file to keep the application running.
     sudo nano /etc/systemd/system/portfolio.service
     ```
 
-2.  Add the following content (adjust paths/users as needed):
+2.  Add the following content:
 
     ```ini
     [Unit]
@@ -129,23 +122,19 @@ Create a systemd service file to keep the application running.
     [Service]
     User=www-data
     Group=www-data
-    WorkingDirectory=/var/www/portfolio_app
-    Environment="PATH=/var/www/portfolio_app/venv/bin"
-    EnvironmentFile=/var/www/portfolio_app/.env
-    ExecStart=/var/www/portfolio_app/venv/bin/gunicorn --workers 3 --bind unix:portfolio.sock -m 007 wsgi:application
+    WorkingDirectory=/var/www/webhost/portfolio
+    Environment="PATH=/var/www/webhost/portfolio/venv/bin"
+    EnvironmentFile=/var/www/webhost/portfolio/.env
+    ExecStart=/var/www/webhost/portfolio/venv/bin/gunicorn --workers 3 --bind unix:portfolio.sock -m 007 wsgi:application
     Restart=always
 
     [Install]
     WantedBy=multi-user.target
     ```
 
-    *Note: We assume you want to run as `www-data`. You may need to change ownership of the folder:*
+3.  Set ownership and start the service:
     ```bash
-    sudo chown -R www-data:www-data /var/www/portfolio_app
-    ```
-
-3.  Start and enable the service:
-    ```bash
+    sudo chown -R www-data:www-data /var/www/webhost/portfolio
     sudo systemctl start portfolio
     sudo systemctl enable portfolio
     ```
@@ -157,59 +146,42 @@ Create a systemd service file to keep the application running.
 
 ## Step 7: Configure Apache2
 
-Configure Apache2 to proxy requests to Gunicorn.
+Add the application to your existing VirtualHost configuration file (`/etc/apache2/sites-enabled/webhost-le-ssl.conf`).
 
-1.  Enable necessary modules:
+1.  Open the configuration file:
     ```bash
-    sudo a2enmod proxy proxy_http
+    sudo nano /etc/apache2/sites-enabled/webhost-le-ssl.conf
     ```
 
-2.  Create a new virtual host configuration:
-    ```bash
-    sudo nano /etc/apache2/sites-available/portfolio.conf
-    ```
-
-3.  Add the following:
+2.  **Add to SECTION 1: STATIC FILE HANDLING**
+    Add the alias for the portfolio static files:
 
     ```apache
-    <VirtualHost *:80>
-        ServerName your_domain_or_IP
-
-        Alias /static /var/www/portfolio_app/static
-        <Location /static>
-            ProxyPass !
-        </Location>
-
-        <Location />
-            ProxyPass "unix:/var/www/portfolio_app/portfolio.sock|http://localhost/"
-            ProxyPassReverse "unix:/var/www/portfolio_app/portfolio.sock|http://localhost/"
-        </Location>
-        <Directory /var/www/portfolio_app/static>
-            Require all granted
-        </Directory>
-
-        ErrorLog ${APACHE_LOG_DIR}/portfolio_error.log
-        CustomLog ${APACHE_LOG_DIR}/portfolio_access.log combined
-    </VirtualHost>
+    Alias /portfolio/static/ /var/www/webhost/portfolio/static/
+    <Directory /var/www/webhost/portfolio/static>
+        Require all granted
+    </Directory>
     ```
 
-4.  Enable the site and restart Apache:
+3.  **Add to SECTION 2: APPLICATION PROXIES**
+    Add the location block to proxy requests to the Gunicorn socket.
+    *Note: The `X-Forwarded-Prefix` header is required for Flask to generate correct URLs when running under a sub-path.*
+
+    ```apache
+    # --- Portfolio Analyzer App ---
+    <Location /portfolio/>
+        RequestHeader set X-Forwarded-Prefix "/portfolio/"
+        ProxyPass "unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/"
+        ProxyPassReverse "unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/"
+    </Location>
+    ```
+
+4.  **Save and Restart Apache**:
     ```bash
-    sudo a2ensite portfolio
+    sudo apachectl configtest
     sudo systemctl restart apache2
     ```
 
 ## Step 8: Final Verification
 
-Visit `http://your_domain_or_IP` in your browser. You should see the login/dashboard page.
-
-## Maintenance
-
-*   **View Logs**:
-    ```bash
-    sudo journalctl -u portfolio
-    ```
-*   **Restart App**:
-    ```bash
-    sudo systemctl restart portfolio
-    ```
+Visit `https://zapp.sytes.net/portfolio/` in your browser. You should see the Portfolio Analyzer login page.
