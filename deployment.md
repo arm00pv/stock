@@ -94,6 +94,11 @@ sudo chown -R $USER:$USER .
 
     # API Keys
     MARKETAUX_API_KEY=your_marketaux_api_key
+
+    # Session Configuration (Important for multi-app setups)
+    SESSION_COOKIE_NAME=portfolio_session
+    SESSION_COOKIE_PATH=/portfolio
+    SESSION_COOKIE_SECURE=True
     ```
 
 2.  **Initialize the Database**:
@@ -171,8 +176,8 @@ Add the application to your existing VirtualHost configuration file (`/etc/apach
     # --- Portfolio Analyzer App ---
     <Location /portfolio/>
         RequestHeader set X-Forwarded-Prefix "/portfolio/"
-        ProxyPass "unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/"
-        ProxyPassReverse "unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/"
+        ProxyPass unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/
+        ProxyPassReverse unix:/var/www/webhost/portfolio/portfolio.sock|http://localhost/
     </Location>
     ```
 
