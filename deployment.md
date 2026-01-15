@@ -16,7 +16,7 @@ Update your package lists and install necessary system packages:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-pip python3-dev python3-venv build-essential libssl-dev libffi-dev python3-setuptools mysql-server libmysqlclient-dev git nginx
+sudo apt install -y python3-pip python3-dev python3-venv build-essential libssl-dev libffi-dev python3-setuptools mysql-server libmysqlclient-dev git apache2
 ```
 
 ## Step 2: Database Setup
@@ -131,7 +131,9 @@ Create a systemd service file to keep the application running.
     Group=www-data
     WorkingDirectory=/var/www/portfolio_app
     Environment="PATH=/var/www/portfolio_app/venv/bin"
+    EnvironmentFile=/var/www/portfolio_app/.env
     ExecStart=/var/www/portfolio_app/venv/bin/gunicorn --workers 3 --bind unix:portfolio.sock -m 007 wsgi:application
+    Restart=always
 
     [Install]
     WantedBy=multi-user.target
@@ -153,46 +155,48 @@ Create a systemd service file to keep the application running.
     sudo systemctl status portfolio
     ```
 
-## Step 7: Configure Nginx
+## Step 7: Configure Apache2
 
-Configure Nginx to proxy requests to Gunicorn.
+Configure Apache2 to proxy requests to Gunicorn.
 
-1.  Create a new server block config:
+1.  Enable necessary modules:
     ```bash
-    sudo nano /etc/nginx/sites-available/portfolio
+    sudo a2enmod proxy proxy_http
     ```
 
-2.  Add the following:
-
-    ```nginx
-    server {
-        listen 80;
-        server_name your_domain_or_IP;
-
-        location / {
-            include proxy_params;
-            proxy_pass http://unix:/var/www/portfolio_app/portfolio.sock;
-        }
-
-        location /static {
-            alias /var/www/portfolio_app/static;
-        }
-    }
+2.  Create a new virtual host configuration:
+    ```bash
+    sudo nano /etc/apache2/sites-available/portfolio.conf
     ```
 
-3.  Enable the site:
-    ```bash
-    sudo ln -s /etc/nginx/sites-available/portfolio /etc/nginx/sites-enabled
+3.  Add the following:
+
+    ```apache
+    <VirtualHost *:80>
+        ServerName your_domain_or_IP
+
+        Alias /static /var/www/portfolio_app/static
+        <Location /static>
+            ProxyPass !
+        </Location>
+
+        <Location />
+            ProxyPass "unix:/var/www/portfolio_app/portfolio.sock|http://localhost/"
+            ProxyPassReverse "unix:/var/www/portfolio_app/portfolio.sock|http://localhost/"
+        </Location>
+        <Directory /var/www/portfolio_app/static>
+            Require all granted
+        </Directory>
+
+        ErrorLog ${APACHE_LOG_DIR}/portfolio_error.log
+        CustomLog ${APACHE_LOG_DIR}/portfolio_access.log combined
+    </VirtualHost>
     ```
 
-4.  Test Nginx config:
+4.  Enable the site and restart Apache:
     ```bash
-    sudo nginx -t
-    ```
-
-5.  Restart Nginx:
-    ```bash
-    sudo systemctl restart nginx
+    sudo a2ensite portfolio
+    sudo systemctl restart apache2
     ```
 
 ## Step 8: Final Verification
