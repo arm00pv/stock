@@ -27,15 +27,11 @@ def scrape_sp500_tickers():
         print(f"Could not scrape S&P 500 list: {e}")
         return set()
 
-def update_stock_details(ticker, market_cap, sector, is_sp500):
-    """Updates a single stock's details in the database."""
-    conn = get_db_connection()
+def update_stock_details(conn, ticker, market_cap, sector, is_sp500):
+    """Updates a single stock's details in the database using an existing connection."""
     if not conn: return
     cursor = conn.cursor()
     try:
-        # Check if a row for this ticker already exists, if not, this will fail gracefully.
-        # A better approach would be to INSERT...ON DUPLICATE KEY UPDATE if the primary key was just the ticker.
-        # Given the composite key, a simple UPDATE is safer.
         sql = """
             UPDATE stocks
             SET market_cap = %s, sector = %s, is_sp500 = %s
@@ -48,12 +44,11 @@ def update_stock_details(ticker, market_cap, sector, is_sp500):
         conn.rollback()
     finally:
         cursor.close()
-        conn.close()
 
 def run_enrichment():
     """
     Goes through all securities in the 'stocks' table and enriches them
-    with market cap, sector, and S&P 500 status.
+    with market cap, sector, and S&P 500 status, using a single DB connection.
     """
     print("--- Starting Data Enrichment Pipeline ---")
 
@@ -61,6 +56,8 @@ def run_enrichment():
 
     print("Fetching all existing tickers from database...")
     all_db_tickers = set()
+    # Note: get_tickers_by_category opens and closes a connection for each category.
+    # This could be further optimized, but for now, we focus on the main N+1 issue.
     categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'etf', 'generic_stock', 'bond']
     for category in categories:
         all_db_tickers.update(get_tickers_by_category(category))
@@ -68,28 +65,39 @@ def run_enrichment():
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
 
-    for ticker in all_db_tickers:
-        try:
-            print(f"Enriching {ticker}...")
-            stock_info = yf.Ticker(ticker).info
+    conn = get_db_connection()
+    if not conn:
+        print("Could not establish database connection. Aborting enrichment.")
+        return
 
-            market_cap = stock_info.get('marketCap')
-            sector = stock_info.get('sector')
-            is_sp500 = ticker in sp500_tickers
+    try:
+        for ticker in all_db_tickers:
+            try:
+                print(f"Enriching {ticker}...")
+                stock_info = yf.Ticker(ticker).info
 
-            if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
-                enriched_count += 1
-            else:
-                print(f"  -> No new info found for {ticker}.")
+                market_cap = stock_info.get('marketCap')
+                sector = stock_info.get('sector')
+                is_sp500 = ticker in sp500_tickers
 
-            # Add a delay to avoid rate limiting
-            time.sleep(2)
+                if market_cap or sector or is_sp500:
+                    # Pass the single connection object to the update function
+                    update_stock_details(conn, ticker, market_cap, sector, is_sp500)
+                    enriched_count += 1
+                else:
+                    print(f"  -> No new info found for {ticker}.")
 
-        except Exception as e:
-            print(f"  -> Error processing {ticker}: {e}")
-            # Also sleep on error to avoid hammering the API
-            time.sleep(2)
+                # Add a delay to avoid rate limiting with the yfinance API
+                time.sleep(2)
+
+            except Exception as e:
+                print(f"  -> Error processing {ticker}: {e}")
+                # Also sleep on error to avoid hammering the API
+                time.sleep(2)
+    finally:
+        if conn.is_connected():
+            conn.close()
+            print("Database connection closed.")
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
