@@ -79,6 +79,30 @@ def save_daily_pick(category, ticker, sentiment_score=None):
         cursor.close()
         conn.close()
 
+def set_sell_flags_batch(tickers_true, tickers_false):
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        if tickers_true:
+            # Generate a comma-separated string of placeholders for the IN clause
+            placeholders = ', '.join(['%s'] * len(tickers_true))
+            sql = f"UPDATE portfolio_transactions SET sell_flag = 1 WHERE ticker IN ({placeholders})"
+            cursor.execute(sql, tuple(tickers_true))
+
+        if tickers_false:
+            placeholders = ', '.join(['%s'] * len(tickers_false))
+            sql = f"UPDATE portfolio_transactions SET sell_flag = 0 WHERE ticker IN ({placeholders})"
+            cursor.execute(sql, tuple(tickers_false))
+
+        conn.commit()
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"Database error while batch setting sell_flags: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 def get_pick_history_for_category(category):
     conn = get_db_connection()
     if not conn: return []
