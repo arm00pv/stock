@@ -267,17 +267,23 @@ def get_untracked_picks():
         conn.close()
     return picks_to_track
 
-def add_performance_record(pick_id, days_after, performance):
+def add_performance_records_batch(records):
+    """Adds a batch of performance records to the database."""
+    if not records:
+        return
     conn = get_db_connection()
     if not conn: return
     cursor = conn.cursor()
     today_str = datetime.now().strftime('%Y-%m-%d')
     sql = "INSERT INTO pick_performance (pick_id, days_after_pick, performance_percent, date_checked) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE performance_percent = VALUES(performance_percent), date_checked = VALUES(date_checked)"
+    # Add today_str to each record tuple
+    data_to_insert = [(*record, today_str) for record in records]
     try:
-        cursor.execute(sql, (pick_id, days_after, performance, today_str))
+        cursor.executemany(sql, data_to_insert)
         conn.commit()
     except mysql.connector.Error as e:
-        print(f"Error adding performance record: {e}")
+        print(f"Error adding performance records in batch: {e}")
+        conn.rollback()
     finally:
         cursor.close()
         conn.close()
