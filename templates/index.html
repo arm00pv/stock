@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Picks</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -31,6 +32,9 @@
         <div id="HotStocks" class="tab-content" style="display:block;">
             <h1>Hot Stock of the Day</h1>
             <div id="hot-daily-pick" class="daily-pick-container"></div>
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="hotStockChart"></canvas>
+            </div>
             <h2>Historical Picks</h2>
             <div id="hot-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
@@ -97,6 +101,13 @@
                 <div class="beta-card">
                     <h3>Trending Topics</h3>
                     <div id="trending-topics"></div>
+                </div>
+                <div class="beta-card" style="grid-column: span 3;">
+                    <h3>Stock Comparison</h3>
+                    <input type="text" id="comp-t1" placeholder="Ticker 1 (e.g. AAPL)">
+                    <input type="text" id="comp-t2" placeholder="Ticker 2 (e.g. MSFT)">
+                    <button onclick="compareStocks()">Compare</button>
+                    <div id="comparison-result"></div>
                 </div>
             </div>
         </div>
@@ -169,6 +180,35 @@
         // Show ad banner for non-beta (simplified logic: always show for demo)
         document.getElementById('ad-banner').style.display = 'block';
 
+        function compareStocks() {
+            const t1 = document.getElementById('comp-t1').value;
+            const t2 = document.getElementById('comp-t2').value;
+            if(!t1 || !t2) return;
+
+            const div = document.getElementById('comparison-result');
+            div.innerHTML = 'Comparing...';
+
+            fetch(`/api/beta/compare?ticker1=${t1}&ticker2=${t2}`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.error) {
+                    div.innerHTML = `Error: ${data.error}`;
+                    return;
+                }
+                const m1 = data.ticker1;
+                const m2 = data.ticker2;
+
+                div.innerHTML = `
+                    <table style="width:100%; text-align:left;">
+                        <tr><th>Metric</th><th>${m1.ticker}</th><th>${m2.ticker}</th></tr>
+                        <tr><td>Price</td><td>$${m1.price}</td><td>$${m2.price}</td></tr>
+                        <tr><td>PE Ratio</td><td>${m1.pe_ratio}</td><td>${m2.pe_ratio}</td></tr>
+                        <tr><td>Beta</td><td>${m1.beta}</td><td>${m2.beta}</td></tr>
+                        <tr><td>Volatility</td><td>${m1.volatility}%</td><td>${m2.volatility}%</td></tr>
+                    </table>
+                `;
+            });
+        }
     </script>
 
     <script>
@@ -192,6 +232,32 @@
             return `<a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>`;
         }
 
+        let hotStockChartInstance = null;
+
+        function renderChart(ticker) {
+            if (!ticker) return;
+            fetch(`/api/history/${ticker}`)
+            .then(r => r.json())
+            .then(data => {
+                const ctx = document.getElementById('hotStockChart').getContext('2d');
+                if (hotStockChartInstance) hotStockChartInstance.destroy();
+
+                hotStockChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: `${ticker} Price History`,
+                            data: data.data,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            });
+        }
+
         function populatePicks(endpoint, dailyPickId, historicalPicksId) {
             const dailyPickDiv = document.getElementById(dailyPickId);
             const historicalPicksUl = document.getElementById(historicalPicksId).querySelector('ul');
@@ -208,6 +274,11 @@
                         sentimentStar = '<span class="sentiment-star">★</span>';
                     }
                     dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}${sentimentStar}</h2>`;
+
+                    // Render Chart if this is the Hot Stock tab
+                    if (dailyPickId === 'hot-daily-pick' && data.ticker && !data.ticker.includes(' ')) {
+                        renderChart(data.ticker);
+                    }
 
                     historicalPicksUl.innerHTML = '';
                     if (data.history && data.history.length > 0) {

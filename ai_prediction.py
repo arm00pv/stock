@@ -9,6 +9,8 @@ class StockPredictor:
     def __init__(self):
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
         self.days_to_predict = 7
+        self.cache = {}
+        self.cache_ttl = 3600 # 1 hour
 
     def fetch_data(self, ticker, months=6):
         end_date = datetime.now()
@@ -44,6 +46,12 @@ class StockPredictor:
         return df
 
     def train_and_predict(self, ticker):
+        # Check cache
+        if ticker in self.cache:
+            val, timestamp = self.cache[ticker]
+            if (datetime.now() - timestamp).total_seconds() < self.cache_ttl:
+                return val
+
         df = self.fetch_data(ticker)
         data = self.prepare_features(df)
 
@@ -73,8 +81,12 @@ class StockPredictor:
         if X_latest.isnull().values.any():
             return None
 
-        prediction = self.model.predict(X_latest)
-        return prediction[0]
+        prediction = self.model.predict(X_latest)[0]
+
+        # Cache result
+        self.cache[ticker] = (prediction, datetime.now())
+
+        return prediction
 
     def predict_sp500(self):
         # Example using SPY as proxy

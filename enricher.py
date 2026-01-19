@@ -4,13 +4,14 @@ import time
 import json
 import os
 import io
+import tempfile
 from database import get_tickers_by_category, update_stock_details_batch
 from dotenv import load_dotenv
 import requests
 
 load_dotenv()
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sp500_cache.json')
+CACHE_FILE = os.path.join(tempfile.gettempdir(), 'stock_picker_sp500_cache.json')
 CACHE_TTL = 86400  # 24 hours
 
 def get_sp500_tickers():

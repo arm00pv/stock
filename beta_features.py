@@ -318,3 +318,53 @@ def calculate_dcf(ticker):
         return None
     except Exception:
         return None
+
+# --- Stock Comparison ---
+def compare_stocks(ticker1, ticker2):
+    """Compares two stocks on key metrics."""
+    def get_metrics(ticker):
+        try:
+            info = yf.Ticker(ticker).info
+            hist = fetch_history([ticker], period='1y')
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist = hist[ticker]
+
+            # Calculate volatility (annualized std dev of daily returns)
+            returns = hist['Close'].pct_change()
+            volatility = returns.std() * np.sqrt(252)
+
+            return {
+                'ticker': ticker,
+                'price': info.get('regularMarketPrice'),
+                'pe_ratio': info.get('trailingPE'),
+                'market_cap': info.get('marketCap'),
+                'beta': info.get('beta'),
+                'volatility': round(volatility * 100, 2),
+                '52_week_high': info.get('fiftyTwoWeekHigh'),
+                '52_week_low': info.get('fiftyTwoWeekLow')
+            }
+        except Exception as e:
+            return {'ticker': ticker, 'error': str(e)}
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        t1_metrics = executor.submit(get_metrics, ticker1).result()
+        t2_metrics = executor.submit(get_metrics, ticker2).result()
+
+    return {'ticker1': t1_metrics, 'ticker2': t2_metrics}
+
+# --- Chart Data ---
+def get_history_data(ticker):
+    """Fetches historical closing data for charts."""
+    df = fetch_history([ticker], period='1y')
+    if df is None or df.empty:
+        return {'labels': [], 'data': []}
+
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df[ticker]
+
+    df = df.reset_index()
+    # Format: labels (dates), data (prices)
+    labels = df.iloc[:, 0].dt.strftime('%Y-%m-%d').tolist() # Assume first col is Date
+    prices = df['Close'].tolist()
+
+    return {'labels': labels, 'data': prices}

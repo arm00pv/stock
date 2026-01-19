@@ -360,6 +360,17 @@ def beta_efficient_frontier():
     if not tickers: return jsonify({'error': 'No tickers provided'}), 400
     return jsonify(beta_features.simulate_efficient_frontier(tickers))
 
+@app.route('/api/beta/compare')
+def beta_compare():
+    t1 = request.args.get('ticker1')
+    t2 = request.args.get('ticker2')
+    if not t1 or not t2: return jsonify({'error': 'Missing tickers'}), 400
+    return jsonify(beta_features.compare_stocks(t1, t2))
+
+@app.route('/api/history/<ticker>')
+def api_history(ticker):
+    return jsonify(beta_features.get_history_data(ticker))
+
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
     user_message = request.json.get('message', '')
