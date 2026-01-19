@@ -29,6 +29,7 @@ app = Flask(__name__)
 # --- Configuration ---
 SCRAPER_API_KEY = os.environ.get('SCRAPER_API_KEY', 'your-super-secret-key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0') == '1'
 app.config['SESSION_COOKIE_NAME'] = os.environ.get('SESSION_COOKIE_NAME', 'session')
 app.config['SESSION_COOKIE_PATH'] = os.environ.get('SESSION_COOKIE_PATH', '/')
 app.config['SESSION_COOKIE_SECURE'] = True

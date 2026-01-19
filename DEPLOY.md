@@ -73,7 +73,13 @@ Ensure `www-data` owns the directory:
 sudo chown -R www-data:www-data /var/www/webhost/stock
 ```
 
-## Step 5: Automation (Cron)
+## Step 5: Pre-Flight Check
+Run the included check script to verify connections and dependencies before restarting Apache:
+```bash
+/var/www/webhost/stock/venv/bin/python /var/www/webhost/stock/deploy_check.py
+```
+
+## Step 6: Automation (Cron)
 Set up cron jobs (`crontab -e`) to run background tasks. Ensure you use the virtual environment's Python:
 
 ```cron
