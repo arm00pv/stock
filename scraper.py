@@ -3,7 +3,7 @@ import requests
 import csv
 import io
 from collections import defaultdict
-from database import init_db, update_tickers_from_source, get_tickers_by_category, prune_old_tickers
+from database import init_db, update_tickers_from_source, get_tickers_by_category, get_all_tickers, prune_old_tickers
 
 # Load environment variables for API keys
 from dotenv import load_dotenv
@@ -14,11 +14,7 @@ ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', 'demo') # Default 
 
 def get_all_existing_tickers():
     """Fetches all tickers currently in the database across all categories."""
-    all_tickers = set()
-    categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'etf', 'generic_stock', 'bond']
-    for category in categories:
-        all_tickers.update(get_tickers_by_category(category))
-    return all_tickers
+    return get_all_tickers()
 
 def load_securities_from_alphavantage():
     """

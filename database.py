@@ -131,6 +131,16 @@ def get_tickers_by_category(category):
     conn.close()
     return tickers
 
+def get_all_tickers():
+    conn = get_db_connection()
+    if not conn: return set()
+    cursor = conn.cursor()
+    cursor.execute('SELECT ticker FROM stocks')
+    tickers = {item[0] for item in cursor.fetchall()}
+    cursor.close()
+    conn.close()
+    return tickers
+
 def replace_tickers_for_category(tickers, category):
     conn = get_db_connection()
     if not conn: return
