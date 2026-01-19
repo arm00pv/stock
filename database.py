@@ -79,6 +79,29 @@ def save_daily_pick(category, ticker, sentiment_score=None):
         cursor.close()
         conn.close()
 
+def add_performance_records_batch(records):
+    """
+    Batch inserts performance records.
+    records: list of tuples (pick_id, days_after, performance)
+    """
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    sql = "INSERT INTO pick_performance (pick_id, days_after_pick, performance_percent, date_checked) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE performance_percent = VALUES(performance_percent), date_checked = VALUES(date_checked)"
+
+    # Prepare data for executemany
+    data = [(r[0], r[1], r[2], today_str) for r in records]
+
+    try:
+        cursor.executemany(sql, data)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Error adding batch performance records: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 def get_pick_history_for_category(category):
     conn = get_db_connection()
     if not conn: return []
