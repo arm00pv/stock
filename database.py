@@ -121,6 +121,32 @@ def get_recently_picked_tickers(category, days=365):
         conn.close()
     return tickers
 
+def get_recently_picked_tickers_for_categories(categories, days=365):
+    if not categories:
+        return set()
+    conn = get_db_connection()
+    if not conn: return set()
+    cursor = conn.cursor()
+    cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    # Create placeholders for the IN clause
+    format_strings = ','.join(['%s'] * len(categories))
+    sql = f"SELECT ticker FROM daily_picks_history WHERE category IN ({format_strings}) AND pick_date > %s"
+
+    # Prepare parameters: list of categories followed by cutoff_date
+    params = list(categories) + [cutoff_date]
+
+    tickers = set()
+    try:
+        cursor.execute(sql, params)
+        tickers = {row[0] for row in cursor.fetchall()}
+    except mysql.connector.Error as err:
+        print(f"Error getting recent tickers for categories: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+    return tickers
+
 def get_tickers_by_category(category):
     conn = get_db_connection()
     if not conn: return []

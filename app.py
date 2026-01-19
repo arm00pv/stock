@@ -12,7 +12,8 @@ load_dotenv()
 from database import (
     init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
     execute_investment, save_daily_pick, get_pick_history_for_category,
-    get_todays_pick_for_category, get_recently_picked_tickers
+    get_todays_pick_for_category, get_recently_picked_tickers,
+    get_recently_picked_tickers_for_categories
 )
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
@@ -55,10 +56,8 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     print(f"Found {len(unique_tickers)} unique tickers to screen.")
 
     # 2. Filter out recently picked tickers
-    recent_picks = set()
     all_history_categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'daily_investment_pick']
-    for category in all_history_categories:
-        recent_picks.update(get_recently_picked_tickers(category))
+    recent_picks = get_recently_picked_tickers_for_categories(all_history_categories)
 
     candidate_tickers = [t for t in unique_tickers if t not in recent_picks]
     print(f"Screening {len(candidate_tickers)} tickers after removing recent picks.")
