@@ -37,6 +37,9 @@ This document encapsulates the architectural decisions, coding patterns, and "tr
     sys.modules['mysql'] = MagicMock()
     # ... then import app
     ```
+- **Duplicate Prevention**:
+  - *Database*: Always use `SELECT DISTINCT ticker` when fetching lists to process.
+  - *Logic*: Use Python `set()` operations when merging ticker lists from multiple sources.
 
 ## 3. Common Pitfalls & Solutions
 

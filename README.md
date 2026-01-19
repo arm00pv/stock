@@ -9,6 +9,7 @@ This is a comprehensive Flask-based web application for stock discovery, portfol
 - **Penny Stocks**: Screens for stocks under $5 with positive momentum.
 - **Dividend Picks**: Daily selections for Monthly Dividend and High-Yield categories.
 - **Efficient Caching**: Uses a custom LRU-style cache and `sp500_cache.json` to minimize external API calls.
+- **Ticker Deduplication**: Implements rigorous unique filtering (SELECT DISTINCT) to prevent duplicate processing.
 
 ### 2. Portfolio Management
 - **Automated Tracking**: Tracks "Main", "Monthly Dividend", "Daily Investment", and "High Yield" portfolios.
@@ -79,8 +80,11 @@ Access at `http://127.0.0.1:5000`.
 - **Performance**: `python performance_tracker.py` (Track pick success rates).
 
 ## Testing
-Run the consolidation test suite to verify imports and basic logic:
+Run the comprehensive test suite to verify functionality and UI:
 ```bash
 python test_consolidation.py
 python test_endpoints.py
+python test_new_features.py
+python verify_tickers.py
+python verify_ui_enhancements.py
 ```
