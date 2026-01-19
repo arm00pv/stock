@@ -3,6 +3,7 @@ import random
 from datetime import datetime, timedelta
 import yfinance as yf
 import pandas as pd
+import concurrent.futures
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
@@ -218,15 +219,41 @@ def portfolio_data(portfolio_name):
     holdings = get_portfolio_holdings(portfolio_name)
     total_value = 0
     detailed_holdings = []
+
+    # Identify tickers not in cache
+    tickers_to_fetch = list(set([h['ticker'] for h in holdings if get_from_cache(h['ticker']) is None]))
+    fetched_prices = {}
+
+    def fetch_price(ticker):
+        try:
+            # We use a new Ticker object per thread
+            price = yf.Ticker(ticker).info.get('regularMarketPrice')
+            return ticker, price
+        except Exception:
+            return ticker, None
+
+    if tickers_to_fetch:
+        # Use ThreadPoolExecutor to fetch in parallel
+        # Limit workers to avoid overwhelming the system or API limits
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_ticker = {executor.submit(fetch_price, t): t for t in tickers_to_fetch}
+            for future in concurrent.futures.as_completed(future_to_ticker):
+                try:
+                    ticker, price = future.result()
+                    if price:
+                        fetched_prices[ticker] = price
+                        set_in_cache(ticker, price)
+                except Exception:
+                    pass
+
     for holding in holdings:
         ticker = holding['ticker']
         current_price = get_from_cache(ticker)
+
+        # If still not in cache (fetch failed or not cached), check fetched_prices or use fallback
         if current_price is None:
-            try:
-                current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
-                if current_price: set_in_cache(ticker, current_price)
-            except Exception:
-                current_price = holding['purchase_price']
+            current_price = fetched_prices.get(ticker, holding['purchase_price'])
+
         value = holding['shares'] * current_price
         total_value += value
         detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
