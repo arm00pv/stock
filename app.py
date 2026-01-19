@@ -218,11 +218,51 @@ def portfolio_data(portfolio_name):
     holdings = get_portfolio_holdings(portfolio_name)
     total_value = 0
     detailed_holdings = []
+
+    # Batch fetch prices for tickers not in cache
+    tickers_to_fetch = set()
+    for holding in holdings:
+        if get_from_cache(holding['ticker']) is None:
+            tickers_to_fetch.add(holding['ticker'])
+
+    if tickers_to_fetch:
+        try:
+            fetch_list = list(tickers_to_fetch)
+            data = yf.download(fetch_list, period="1d", group_by='ticker', progress=False)
+            if not data.empty:
+                # Get the last row (latest prices)
+                last_row = data.iloc[-1]
+
+                # Check if we have a MultiIndex columns (standard for group_by='ticker')
+                is_multi_index = isinstance(data.columns, pd.MultiIndex)
+
+                for ticker in fetch_list:
+                    try:
+                        price = None
+                        if is_multi_index:
+                            if (ticker, 'Close') in last_row.index:
+                                price = last_row[(ticker, 'Close')]
+                        else:
+                            # Handle single ticker case if structure is flat
+                            # If we requested multiple tickers, it should be MultiIndex.
+                            # If we requested 1 ticker, it might be flat or MultiIndex depending on version.
+                            if len(fetch_list) == 1 and fetch_list[0] == ticker:
+                                if 'Close' in last_row.index:
+                                    price = last_row['Close']
+
+                        if price is not None and pd.notna(price):
+                            set_in_cache(ticker, float(price))
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Batch price fetch failed: {e}")
+
     for holding in holdings:
         ticker = holding['ticker']
         current_price = get_from_cache(ticker)
         if current_price is None:
             try:
+                # Fallback to single fetch if batch failed or missed
                 current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
                 if current_price: set_in_cache(ticker, current_price)
             except Exception:
