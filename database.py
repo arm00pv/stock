@@ -96,13 +96,98 @@ def get_pick_history_for_category(category):
     return history
 
 def get_todays_pick_for_category(category):
-    history = get_pick_history_for_category(category)
-    if not history: return None
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor(dictionary=True)
     today_str = datetime.now().strftime('%Y-%m-%d')
-    for pick in history:
-        if pick['date'] == today_str:
-            return pick
-    return None
+    sql = "SELECT id, pick_date, ticker, sentiment_score FROM daily_picks_history WHERE category = %s AND pick_date = %s"
+    pick = None
+    try:
+        cursor.execute(sql, (category, today_str))
+        row = cursor.fetchone()
+        if row:
+            pick = {'id': row['id'], 'date': row['pick_date'].strftime('%Y-%m-%d'), 'ticker': row['ticker'], 'sentiment_score': row['sentiment_score']}
+    except mysql.connector.Error as err:
+        print(f"Error getting today's pick: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+    return pick
+
+def get_all_tickers():
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT DISTINCT ticker FROM stocks")
+        return [row[0] for row in cursor.fetchall()]
+    except mysql.connector.Error as e:
+        print(f"Error getting all tickers: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+def update_stock_details_batch(updates):
+    """
+    Batch updates stock details.
+    updates: list of tuples (market_cap, sector, is_sp500, ticker)
+    """
+    if not updates: return
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    sql = "UPDATE stocks SET market_cap = %s, sector = %s, is_sp500 = %s WHERE ticker = %s"
+    try:
+        cursor.executemany(sql, updates)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Error in batch update stock details: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def set_sell_flags_batch(tickers, flag_value):
+    if not tickers: return
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    # Construct query dynamically for IN clause
+    format_strings = ','.join(['%s'] * len(tickers))
+    sql = f"UPDATE portfolio_transactions SET sell_flag = %s WHERE ticker IN ({format_strings})"
+    params = [1 if flag_value else 0] + list(tickers)
+    try:
+        cursor.execute(sql, params)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Error in batch set sell flags: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def add_performance_records_batch(records):
+    """
+    records: list of tuples (pick_id, days_after, performance, date_checked)
+    """
+    if not records: return
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    sql = """
+        INSERT INTO pick_performance (pick_id, days_after_pick, performance_percent, date_checked)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE performance_percent = VALUES(performance_percent), date_checked = VALUES(date_checked)
+    """
+    try:
+        cursor.executemany(sql, records)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Error in batch add performance records: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_recently_picked_tickers(category, days=365):
     conn = get_db_connection()

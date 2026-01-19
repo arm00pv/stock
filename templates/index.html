@@ -8,6 +8,11 @@
 </head>
 <body>
     <div class="container">
+        <!-- Conditional Ad Banner -->
+        <div class="ad-banner" style="display: none;" id="ad-banner">
+            <p>Upgrade to Pro for Real-time Insights!</p>
+        </div>
+
         <div id="timer-container">
             Next pick in: <span id="countdown"></span>
         </div>
@@ -20,6 +25,7 @@
             <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Portfolio</button>
             <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
+            <button class="tab-link" onclick="openTab(event, 'BetaFeatures')">Beta Features</button>
         </div>
 
         <div id="HotStocks" class="tab-content" style="display:block;">
@@ -71,7 +77,99 @@
             <h2>Holdings</h2>
             <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
         </div>
+
+        <div id="BetaFeatures" class="tab-content">
+            <h1>Beta Features (AI & Advanced Analytics)</h1>
+            <div class="beta-grid">
+                <div class="beta-card">
+                    <h3>AI Chat Assistant</h3>
+                    <div id="chat-widget">
+                        <div id="chat-messages" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; margin-bottom: 10px; padding: 5px;"></div>
+                        <input type="text" id="chat-input" placeholder="Ask me about stocks...">
+                        <button onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+                <div class="beta-card">
+                    <h3>Market Anomalies</h3>
+                    <div id="anomalies-list"></div>
+                    <button onclick="loadAnomalies()">Scan for Anomalies</button>
+                </div>
+                <div class="beta-card">
+                    <h3>Trending Topics</h3>
+                    <div id="trending-topics"></div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <!-- Chat Widget Logic -->
+    <script>
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatBox = document.getElementById('chat-messages');
+
+            // User message (sanitized via textContent)
+            const userDiv = document.createElement('div');
+            userDiv.className = 'message user';
+            userDiv.textContent = 'You: ' + message;
+            chatBox.appendChild(userDiv);
+
+            input.value = '';
+
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message})
+            })
+            .then(r => r.json())
+            .then(data => {
+                const botDiv = document.createElement('div');
+                botDiv.className = 'message bot';
+                // Allow innerHTML for bot to format links/bold/etc safely controlled by backend
+                botDiv.innerHTML = 'AI: ' + data.response;
+                chatBox.appendChild(botDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+
+        function loadAnomalies() {
+            const div = document.getElementById('anomalies-list');
+            div.innerHTML = 'Scanning...';
+            fetch('/api/beta/anomalies')
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No anomalies detected.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(a => {
+                    const li = document.createElement('li');
+                    li.textContent = `${a.ticker}: ${a.reason}`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        // Load trending on tab open or page load
+        fetch('/api/beta/trending')
+        .then(r => r.json())
+        .then(data => {
+            const div = document.getElementById('trending-topics');
+            if(div) {
+                div.innerHTML = data.map(t => `<span style="font-size: ${12 + t.value/5}px; margin: 5px;">${t.text}</span>`).join(' ');
+            }
+        });
+
+        // Show ad banner for non-beta (simplified logic: always show for demo)
+        document.getElementById('ad-banner').style.display = 'block';
+
+    </script>
 
     <script>
         const API_BASE_URL = "{{ url_for('index', _external=False) }}";

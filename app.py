@@ -6,6 +6,7 @@ import pandas as pd
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
@@ -20,12 +21,19 @@ from performance_tracker import run_performance_check
 from enricher import run_enrichment
 from utils import is_market_open
 from cache import get as get_from_cache, set as set_in_cache
+import beta_features
+from ai_assistant import get_ai_response
 
 app = Flask(__name__)
 
 # --- Configuration ---
 SCRAPER_API_KEY = os.environ.get('SCRAPER_API_KEY', 'your-super-secret-key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+app.config['SESSION_COOKIE_NAME'] = os.environ.get('SESSION_COOKIE_NAME', 'session')
+app.config['SESSION_COOKIE_PATH'] = os.environ.get('SESSION_COOKIE_PATH', '/')
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # --- Constants ---
 MIN_AVG_VOLUME = 100000
@@ -216,20 +224,37 @@ def api_high_yield_dividend_stock(): return get_daily_pick_response('high_yield_
 def portfolio_data(portfolio_name):
     summary = get_portfolio_summary(portfolio_name)
     holdings = get_portfolio_holdings(portfolio_name)
+
+    # Use ThreadPoolExecutor for parallel price fetching
+    def fetch_price(holding):
+        ticker = holding['ticker']
+        cached = get_from_cache(ticker)
+        if cached:
+            return ticker, cached
+        try:
+            # Fallback to purchase price if fetch fails
+            price = yf.Ticker(ticker).info.get('regularMarketPrice')
+            if price:
+                set_in_cache(ticker, price)
+                return ticker, price
+        except:
+            pass
+        return ticker, holding['purchase_price']
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        prices = dict(executor.map(fetch_price, holdings))
+
     total_value = 0
     detailed_holdings = []
     for holding in holdings:
         ticker = holding['ticker']
-        current_price = get_from_cache(ticker)
-        if current_price is None:
-            try:
-                current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
-                if current_price: set_in_cache(ticker, current_price)
-            except Exception:
-                current_price = holding['purchase_price']
+        current_price = prices.get(ticker, holding['purchase_price'])
+        if current_price is None: current_price = holding['purchase_price'] # Safety net
+
         value = holding['shares'] * current_price
         total_value += value
         detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+
     return jsonify({'portfolio_name': portfolio_name, 'cash_balance': summary[0], 'total_invested': summary[1], 'current_market_value': total_value, 'total_assets': summary[0] + total_value, 'holdings': detailed_holdings})
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
@@ -291,3 +316,53 @@ def run_enrichment_api():
     if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
     try: run_enrichment(); return jsonify({'status': 'success', 'message': 'Data enrichment executed.'})
     except Exception as e: return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
+
+# --- Beta Endpoints ---
+@app.route('/api/beta/signals/<ticker>')
+def beta_signals(ticker):
+    return jsonify(beta_features.calculate_smart_signals(ticker))
+
+@app.route('/api/beta/anomalies')
+def beta_anomalies():
+    # Detect anomalies in recently active tickers or a subset
+    tickers = ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'TSLA', 'SPY', 'QQQ', 'NVDA'] # Sample
+    return jsonify(beta_features.detect_anomalies(tickers))
+
+@app.route('/api/beta/patterns/<ticker>')
+def beta_patterns(ticker):
+    return jsonify(beta_features.scan_patterns(ticker))
+
+@app.route('/api/beta/sector-rotation')
+def beta_sector_rotation():
+    return jsonify(beta_features.sector_rotation_analysis())
+
+@app.route('/api/beta/thesis/<ticker>')
+def beta_thesis(ticker):
+    return jsonify(beta_features.generate_trade_thesis(ticker))
+
+@app.route('/api/beta/pro/<ticker>')
+def beta_pro_details(ticker):
+    return jsonify(beta_features.get_pro_details(ticker))
+
+@app.route('/api/beta/trending')
+def beta_trending():
+    return jsonify(beta_features.get_trending_topics())
+
+@app.route('/api/beta/correlation', methods=['POST'])
+def beta_correlation():
+    tickers = request.json.get('tickers', [])
+    if not tickers: return jsonify({'error': 'No tickers provided'}), 400
+    return jsonify(beta_features.get_correlation_matrix(tickers))
+
+@app.route('/api/beta/efficient-frontier', methods=['POST'])
+def beta_efficient_frontier():
+    tickers = request.json.get('tickers', [])
+    if not tickers: return jsonify({'error': 'No tickers provided'}), 400
+    return jsonify(beta_features.simulate_efficient_frontier(tickers))
+
+@app.route('/api/chat', methods=['POST'])
+def chat_endpoint():
+    user_message = request.json.get('message', '')
+    if not user_message: return jsonify({'response': 'Please say something.'})
+    response = get_ai_response(user_message)
+    return jsonify({'response': response})
