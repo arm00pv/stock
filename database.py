@@ -281,3 +281,19 @@ def add_performance_record(pick_id, days_after, performance):
     finally:
         cursor.close()
         conn.close()
+
+def get_tickers_by_categories(categories):
+    if not categories:
+        return []
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    try:
+        format_strings = ','.join(['%s'] * len(categories))
+        query = 'SELECT ticker FROM stocks WHERE category IN (%s)' % format_strings
+        cursor.execute(query, tuple(categories))
+        tickers = [item[0] for item in cursor.fetchall()]
+        return tickers
+    finally:
+        cursor.close()
+        conn.close()
