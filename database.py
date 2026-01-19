@@ -209,7 +209,7 @@ def get_tickers_by_category(category):
     conn = get_db_connection()
     if not conn: return []
     cursor = conn.cursor()
-    cursor.execute('SELECT ticker FROM stocks WHERE category = %s', (category,))
+    cursor.execute('SELECT DISTINCT ticker FROM stocks WHERE category = %s', (category,))
     tickers = [item[0] for item in cursor.fetchall()]
     cursor.close()
     conn.close()
