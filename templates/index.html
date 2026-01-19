@@ -4,29 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Picks</title>
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-brand"><i class="fas fa-chart-line"></i> StockPicker <span class="badge">PRO</span></div>
+        <div class="nav-controls">
+            <div id="timer-container"><i class="fas fa-clock"></i> <span id="countdown">Loading...</span></div>
+            <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
+        </div>
+    </nav>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
     <div class="container">
         <!-- Conditional Ad Banner -->
         <div class="ad-banner" style="display: none;" id="ad-banner">
-            <p>Upgrade to Pro for Real-time Insights!</p>
+            <p><i class="fas fa-crown"></i> Upgrade to Pro for Real-time Insights!</p>
         </div>
 
-        <div id="timer-container">
-            Next pick in: <span id="countdown"></span>
-        </div>
-        <div class="tabs">
-            <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
-            <button class="tab-link" onclick="openTab(event, 'PennyStocks')">$5 or Less</button>
-            <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')">Monthly Dividend</button>
-            <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'BetaFeatures')">Beta Features</button>
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab-link active" onclick="openTab(event, 'HotStocks')"><i class="fas fa-fire"></i> Hot Stocks</button>
+                <button class="tab-link" onclick="openTab(event, 'PennyStocks')"><i class="fas fa-coins"></i> Penny</button>
+                <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')"><i class="fas fa-calendar-alt"></i> Monthly Div</button>
+                <button class="tab-link" onclick="openTab(event, 'HighYield')"><i class="fas fa-percentage"></i> High Yield</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioMain')"><i class="fas fa-briefcase"></i> Main</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')"><i class="fas fa-piggy-bank"></i> Monthly Port</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')"><i class="fas fa-sun"></i> Daily Port</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')"><i class="fas fa-chart-pie"></i> HY Port</button>
+                <button class="tab-link" onclick="openTab(event, 'BetaFeatures')"><i class="fas fa-robot"></i> AI Beta</button>
+            </div>
         </div>
 
         <div id="HotStocks" class="tab-content" style="display:block;">
@@ -180,21 +196,57 @@
         // Show ad banner for non-beta (simplified logic: always show for demo)
         document.getElementById('ad-banner').style.display = 'block';
 
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('theme-toggle');
+            const icon = btn.querySelector('i');
+
+            body.classList.toggle('dark-mode');
+            if (body.classList.contains('dark-mode')) {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = message;
+
+            container.appendChild(toast);
+
+            // Trigger reflow for animation
+            void toast.offsetWidth;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         function compareStocks() {
             const t1 = document.getElementById('comp-t1').value;
             const t2 = document.getElementById('comp-t2').value;
-            if(!t1 || !t2) return;
+            if(!t1 || !t2) {
+                showToast("Please enter two tickers.", "error");
+                return;
+            }
 
             const div = document.getElementById('comparison-result');
-            div.innerHTML = 'Comparing...';
+            div.innerHTML = '<div class="spinner"></div>';
 
             fetch(`/api/beta/compare?ticker1=${t1}&ticker2=${t2}`)
             .then(r => r.json())
             .then(data => {
                 if(data.error) {
                     div.innerHTML = `Error: ${data.error}`;
+                    showToast("Comparison failed", "error");
                     return;
                 }
+                showToast("Comparison Complete", "success");
                 const m1 = data.ticker1;
                 const m2 = data.ticker2;
 
