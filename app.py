@@ -12,7 +12,8 @@ load_dotenv()
 from database import (
     init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
     execute_investment, save_daily_pick, get_pick_history_for_category,
-    get_todays_pick_for_category, get_recently_picked_tickers
+    get_todays_pick_for_category, get_recently_picked_tickers,
+    get_tickers_by_categories, get_all_tickers
 )
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
@@ -48,10 +49,10 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     print(f"Params: categories={categories_to_search}, price_limit={price_limit}")
 
     # 1. Fetch all unique tickers from the database
-    all_tickers = []
-    for category in categories_to_search:
-        all_tickers.extend(get_tickers_by_category(category))
-    unique_tickers = sorted(list(set(all_tickers)))
+    if categories_to_search:
+        unique_tickers = sorted(get_tickers_by_categories(categories_to_search))
+    else:
+        unique_tickers = sorted(get_all_tickers())
     print(f"Found {len(unique_tickers)} unique tickers to screen.")
 
     # 2. Filter out recently picked tickers

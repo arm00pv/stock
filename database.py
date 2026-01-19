@@ -131,6 +131,32 @@ def get_tickers_by_category(category):
     conn.close()
     return tickers
 
+def get_tickers_by_categories(categories):
+    """Fetches unique tickers for a given list of categories."""
+    if not categories:
+        return []
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    placeholders = ', '.join(['%s'] * len(categories))
+    sql = f"SELECT DISTINCT ticker FROM stocks WHERE category IN ({placeholders})"
+    cursor.execute(sql, tuple(categories))
+    tickers = [item[0] for item in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return tickers
+
+def get_all_tickers():
+    """Fetches all unique tickers from the stocks table."""
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT ticker FROM stocks')
+    tickers = [item[0] for item in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return tickers
+
 def replace_tickers_for_category(tickers, category):
     conn = get_db_connection()
     if not conn: return
