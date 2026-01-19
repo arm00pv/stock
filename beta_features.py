@@ -197,7 +197,7 @@ def sector_rotation_analysis():
                 'ticker': ticker,
                 'momentum': round(momentum * 100, 2)
             })
-        except:
+        except Exception:
             continue
 
     results.sort(key=lambda x: x['momentum'], reverse=True)
@@ -316,5 +316,5 @@ def calculate_dcf(ticker):
             fair_value = dcf_val / shares
             return round(fair_value, 2)
         return None
-    except:
+    except Exception:
         return None

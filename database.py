@@ -1,6 +1,5 @@
 import os
 import mysql.connector
-from mysql.connector import errorcode
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from dotenv import load_dotenv
