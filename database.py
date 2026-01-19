@@ -156,12 +156,13 @@ def update_tickers_from_source(tickers, category, source_url):
     cursor = conn.cursor()
     today_str = datetime.now().strftime('%Y-%m-%d')
     sql = "INSERT INTO stocks (ticker, category, date_added, source_url, last_seen_date) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE last_seen_date = VALUES(last_seen_date), source_url = VALUES(source_url)"
-    for ticker in tickers:
-        try:
-            cursor.execute(sql, (ticker, category, today_str, source_url, today_str))
-        except mysql.connector.Error as err:
-            print(f"Error updating ticker {ticker}: {err}")
-    conn.commit()
+    try:
+        data = [(ticker, category, today_str, source_url, today_str) for ticker in tickers]
+        if data:
+            cursor.executemany(sql, data)
+            conn.commit()
+    except mysql.connector.Error as err:
+        print(f"Error updating tickers batch: {err}")
     cursor.close()
     conn.close()
 
