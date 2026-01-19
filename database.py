@@ -151,19 +151,27 @@ def replace_tickers_for_category(tickers, category):
         conn.close()
 
 def update_tickers_from_source(tickers, category, source_url):
+    if not tickers:
+        return
     conn = get_db_connection()
     if not conn: return
     cursor = conn.cursor()
     today_str = datetime.now().strftime('%Y-%m-%d')
-    sql = "INSERT INTO stocks (ticker, category, date_added, source_url, last_seen_date) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE last_seen_date = VALUES(last_seen_date), source_url = VALUES(source_url)"
-    for ticker in tickers:
-        try:
-            cursor.execute(sql, (ticker, category, today_str, source_url, today_str))
-        except mysql.connector.Error as err:
-            print(f"Error updating ticker {ticker}: {err}")
-    conn.commit()
-    cursor.close()
-    conn.close()
+    sql = """
+        INSERT INTO stocks (ticker, category, date_added, source_url, last_seen_date)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE last_seen_date = VALUES(last_seen_date), source_url = VALUES(source_url)
+    """
+    data = [(ticker, category, today_str, source_url, today_str) for ticker in tickers]
+    try:
+        cursor.executemany(sql, data)
+        conn.commit()
+    except mysql.connector.Error as err:
+        conn.rollback()
+        print(f"Database error during batch ticker update: {err}")
+    finally:
+        cursor.close()
+        conn.close()
 
 def prune_old_tickers(days_old=30):
     conn = get_db_connection()
