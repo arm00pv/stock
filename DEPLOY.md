@@ -1,34 +1,93 @@
-# Deployment Guide for Stock App with Apache2 and MySQL
-(All previous sections are unchanged)
-...
+# Deployment Guide
 
-## Step 9: Configure Automation
-Set up your `n8n` or `cron` jobs to call the application's API endpoints.
+This guide details the deployment of the Stock Picker application on an Ubuntu server using Apache2, MySQL, and WSGI.
 
-### Recommended Automation Schedule
+## System Requirements
+- Ubuntu 20.04 or 22.04 LTS
+- Apache2 (`sudo apt install apache2 libapache2-mod-wsgi-py3`)
+- MySQL Server (`sudo apt install mysql-server`)
+- Python 3.8+ (`sudo apt install python3-pip python3-venv`)
 
-1.  **Populate Security List (Daily):**
-    *   **Trigger:** Daily (e.g., at 1 AM).
-    *   **Endpoint:** `POST` to `https://zapp.sytes.net/stock/api/run-scraper`
-    *   **Purpose:** Adds new stocks, ETFs, and bonds from Alpha Vantage to your database.
+## Directory Structure
+Deploy the application to `/var/www/webhost/stock`:
+```
+/var/www/webhost/stock/
+├── app.py
+├── wsgi.py
+├── database.py
+├── ... (other python files)
+├── templates/
+├── static/
+└── .env
+```
 
-2.  **Enrich Security Data (Daily):**
-    *   **Trigger:** Daily (e.g., at 2 AM, after the population step).
-    *   **Endpoint:** `POST` to `https://zapp.sytes.net/stock/api/run-enrichment`
-    *   **Purpose:** Updates all securities in your database with their latest Market Cap, Sector, and S&P 500 status.
+## Step 1: Database Setup
+1. Log in to MySQL: `sudo mysql`
+2. Create database and user:
+   ```sql
+   CREATE DATABASE stock_db;
+   CREATE USER 'stock_user'@'localhost' IDENTIFIED BY 'secure_password';
+   GRANT ALL PRIVILEGES ON stock_db.* TO 'stock_user'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
 
-3.  **Sentiment Analysis (Hourly):**
-    *   **Trigger:** Hourly.
-    *   **Endpoint:** `POST` to `https://zapp.sytes.net/stock/api/run-sentiment-analysis`
-    *   **Purpose:** Updates sell flags on your current portfolio holdings based on news sentiment.
+## Step 2: Application Environment
+1. Create a virtual environment:
+   ```bash
+   cd /var/www/webhost/stock
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+2. Configure `.env`:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your DB credentials and API keys
+   ```
 
-4.  **Performance Tracking (Daily):**
-    *   **Trigger:** Daily (e.g., at 3 AM).
-    *   **Endpoint:** `POST` to `https://zapp.sytes.net/stock/api/run-performance-tracker`
-    *   **Purpose:** Checks the 7, 30, and 90-day performance of past picks.
+## Step 3: Apache Configuration
+Create or edit your site config (e.g., `/etc/apache2/sites-available/000-default.conf`):
 
-5.  **Portfolio Investments (Weekly/Daily):**
-    *   **Trigger:** On your desired schedule (e.g., daily or weekly at 8 AM).
-    *   **Endpoints:** Call the specific `/api/trigger-investment/<portfolio_name>` endpoint for each portfolio you want to automate.
+```apache
+<VirtualHost *:80>
+    ServerName zapp.sytes.net
 
-**Note:** All automation endpoints are protected by the `SCRAPER_API_KEY` set in your `.env` file. You must include it as an `X-API-Key` header in your requests.
+    # ... other configurations ...
+
+    WSGIDaemonProcess stock_app threads=5 python-home=/var/www/webhost/stock/venv
+    WSGIScriptAlias /stock /var/www/webhost/stock/wsgi.py
+
+    <Directory /var/www/webhost/stock>
+        WSGIProcessGroup stock_app
+        WSGIApplicationGroup %{GLOBAL}
+        Order deny,allow
+        Allow from all
+    </Directory>
+</VirtualHost>
+```
+*Note: The `WSGIDaemonProcess` uses `threads=5` which complements the `stock_pool` size of 5 in `database.py`.*
+
+## Step 4: Verify Permissions
+Ensure `www-data` owns the directory:
+```bash
+sudo chown -R www-data:www-data /var/www/webhost/stock
+```
+
+## Step 5: Automation (Cron)
+Set up cron jobs (`crontab -e`) to run background tasks. Ensure you use the virtual environment's Python:
+
+```cron
+# Daily Scraper (1 AM)
+0 1 * * * /var/www/webhost/stock/venv/bin/python /var/www/webhost/stock/scraper.py >> /var/log/stock_scraper.log 2>&1
+
+# Daily Enrichment (2 AM)
+0 2 * * * /var/www/webhost/stock/venv/bin/python /var/www/webhost/stock/enricher.py >> /var/log/stock_enricher.log 2>&1
+
+# Hourly Sentiment (Every hour)
+0 * * * * /var/www/webhost/stock/venv/bin/python /var/www/webhost/stock/sentiment_analyzer.py >> /var/log/stock_sentiment.log 2>&1
+```
+
+## Troubleshooting
+- **Logs**: Check `/var/log/apache2/error.log` for WSGI errors.
+- **Database**: Ensure `DB_HOST` is set to `localhost` in `.env`.
+- **Dependencies**: Run `pip freeze` inside the venv to ensure `mysql-connector-python` and `scikit-learn` are installed.
