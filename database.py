@@ -241,6 +241,37 @@ def execute_investment(portfolio_name, ticker, shares, price, investment_amount)
         cursor.close()
         conn.close()
 
+def update_stock_details_batch(updates):
+    """
+    Updates multiple stocks' details in the database.
+    updates: list of tuples (market_cap, sector, is_sp500, ticker)
+    """
+    if not updates:
+        return
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = """
+            UPDATE stocks
+            SET market_cap = %s, sector = %s, is_sp500 = %s
+            WHERE ticker = %s
+        """
+        # Convert boolean is_sp500 to integer for database
+        formatted_updates = []
+        for update in updates:
+            formatted_updates.append((update[0], update[1], 1 if update[2] else 0, update[3]))
+
+        cursor.executemany(sql, formatted_updates)
+        conn.commit()
+        print(f"Successfully updated details for {len(updates)} tickers.")
+    except Exception as e:
+        print(f"Error in batch update: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
 def get_untracked_picks():
     conn = get_db_connection()
     if not conn: return []
