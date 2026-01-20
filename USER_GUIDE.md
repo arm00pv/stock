@@ -46,6 +46,8 @@ The main interface is divided into tabs:
 ## 3. Discovering Stocks
 Click on any of the first four tabs to see the **Pick of the Day**.
 
+![Penny Stocks](example_pages/penny_stocks.png)
+
 ### How to Read a Pick
 - **The Ticker**: Displayed in large text (e.g., `AAPL`). Click it to open the Yahoo Finance page for that stock.
 - **Sentiment Star (★)**: If you see a green star, it means recent news sentiment for this stock is highly positive.
@@ -84,6 +86,8 @@ Ask questions about the market!
 - **Try asking**: *"Analyze AAPL"* or *"Price of MSFT"* or *"Risk for TSLA"*.
 - The AI will respond with technical indicators and a trade thesis.
 
+![Chat Interaction](example_pages/chat_interaction.png)
+
 ### Market Anomalies
 Click **"Scan for Anomalies"** to find stocks behaving unusually (e.g., sudden volume spikes or price drops). This is great for finding breakout candidates.
 
@@ -93,6 +97,8 @@ Compare two stocks side-by-side.
 2. Enter the second ticker (e.g., `AMD`).
 3. Click **Compare**.
 4. View metrics like **PE Ratio**, **Beta** (Volatility), and **Price**.
+
+![Comparison Result](example_pages/comparison_result.png)
 
 ### Trending Topics
 A word cloud shows you what topics are currently dominating financial news (e.g., "Inflation", "Fed", "Earnings").
@@ -105,3 +111,5 @@ A word cloud shows you what topics are currently dominating financial news (e.g.
 ![Dark Mode](example_pages/dark_mode.png)
 
 - **Mobile View**: The app is fully responsive and works great on your phone or tablet.
+
+![Mobile Dashboard](example_pages/mobile_dashboard.png)
