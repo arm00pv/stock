@@ -2,6 +2,8 @@
 
 This is a comprehensive Flask-based web application for stock discovery, portfolio tracking, and advanced market analysis. It unifies traditional screening methods with AI-powered insights.
 
+> **For End Users:** Please check the [User Guide](USER_GUIDE.md) for step-by-step instructions on how to use the app.
+
 ## Core Features
 
 ### 1. Daily Picks & Screening
