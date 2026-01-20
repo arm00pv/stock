@@ -1,5 +1,6 @@
 import os
 import random
+import concurrent.futures
 from datetime import datetime, timedelta
 import yfinance as yf
 import pandas as pd
@@ -218,18 +219,50 @@ def portfolio_data(portfolio_name):
     holdings = get_portfolio_holdings(portfolio_name)
     total_value = 0
     detailed_holdings = []
+
+    # Identify which tickers are missing from cache
+    tickers_to_fetch = []
+    prices = {} # Map ticker -> price
+
     for holding in holdings:
         ticker = holding['ticker']
-        current_price = get_from_cache(ticker)
-        if current_price is None:
+        cached_price = get_from_cache(ticker)
+        if cached_price is not None:
+            prices[ticker] = cached_price
+        else:
+            tickers_to_fetch.append(ticker)
+
+    # Fetch missing tickers in parallel
+    if tickers_to_fetch:
+        unique_tickers = list(set(tickers_to_fetch))
+
+        def fetch_price(t):
             try:
-                current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
-                if current_price: set_in_cache(ticker, current_price)
+                info = yf.Ticker(t).info
+                return t, info.get('regularMarketPrice')
             except Exception:
-                current_price = holding['purchase_price']
+                return t, None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_ticker = {executor.submit(fetch_price, t): t for t in unique_tickers}
+            for future in concurrent.futures.as_completed(future_to_ticker):
+                t, price = future.result()
+                if price:
+                    prices[t] = price
+                    set_in_cache(t, price)
+
+    for holding in holdings:
+        ticker = holding['ticker']
+        current_price = prices.get(ticker)
+
+        # Fallback to purchase price if fetch failed or price unavailable
+        if current_price is None:
+            current_price = holding['purchase_price']
+
         value = holding['shares'] * current_price
         total_value += value
         detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+
     return jsonify({'portfolio_name': portfolio_name, 'cash_balance': summary[0], 'total_invested': summary[1], 'current_market_value': total_value, 'total_assets': summary[0] + total_value, 'holdings': detailed_holdings})
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
