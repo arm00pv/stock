@@ -25,6 +25,8 @@ It also helps you track simulated portfolios and uses AI to analyze market trend
 ## 2. The Dashboard
 When you open the application, you will see the **Main Dashboard**.
 
+![Dashboard View](example_pages/dashboard.png)
+
 ### Navigation Bar
 At the top of the screen:
 - **Timer**: Shows how long until the next daily stock pick is released.
@@ -55,6 +57,8 @@ Click on any of the first four tabs to see the **Pick of the Day**.
 ## 4. Portfolio Tracking
 The app tracks four simulated portfolios. Click on a **Portfolio Tab** (e.g., "$5 Portfolio") to view details.
 
+![Portfolio View](example_pages/portfolio.png)
+
 ### Summary Cards
 - **Total Invested**: The amount of cash put into the portfolio.
 - **Market Value**: The current value of all holdings.
@@ -72,6 +76,8 @@ A detailed list of stocks currently owned:
 
 ## 5. Beta Features (AI & Tools)
 Click the **AI Beta** tab to access advanced tools.
+
+![Beta Features](example_pages/beta_features.png)
 
 ### AI Chat Assistant
 Ask questions about the market!
@@ -95,4 +101,7 @@ A word cloud shows you what topics are currently dominating financial news (e.g.
 
 ## 6. Settings
 - **Dark Mode**: Use the toggle in the top-right corner to switch to a dark theme for comfortable night viewing.
+
+![Dark Mode](example_pages/dark_mode.png)
+
 - **Mobile View**: The app is fully responsive and works great on your phone or tablet.
