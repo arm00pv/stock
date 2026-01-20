@@ -409,3 +409,79 @@ body.dark-mode input {
 .toast-success { background-color: var(--success-color); }
 .toast-error { background-color: var(--danger-color); }
 .toast-info { background-color: var(--primary-color); }
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 15px;
+        margin-top: 10px;
+    }
+
+    .navbar {
+        padding: 10px 15px;
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .nav-brand {
+        justify-content: center;
+    }
+
+    .nav-controls {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    /* Tabs */
+    .tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding-bottom: 5px;
+    }
+
+    .tab-link {
+        flex: 0 0 auto; /* Prevent shrinking */
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    /* Table Scrolling */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+    }
+
+    table {
+        margin-top: 0;
+        min-width: 600px; /* Force table to be wide enough to scroll */
+    }
+
+    /* Beta Grid */
+    .beta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .beta-card {
+        grid-column: span 1 !important; /* Force cards to stack */
+    }
+
+    /* Adjust headings */
+    .daily-pick-container h2 {
+        font-size: 1.8em;
+    }
+
+    /* Toast position */
+    #toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px; /* Full width on mobile */
+    }
+}
