@@ -6,14 +6,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_db_pool = None
+
 def get_db_connection():
+    global _db_pool
     try:
-        conn = mysql.connector.connect(
-            host=os.environ.get('DB_HOST'), user=os.environ.get('DB_USER'),
-            password=os.environ.get('DB_PASSWORD'), database=os.environ.get('DB_NAME'),
-            connection_timeout=10, pool_name="stock_pool", pool_size=5
-        )
-        return conn
+        if not _db_pool:
+            try:
+                _db_pool = mysql.connector.pooling.MySQLConnectionPool(
+                    pool_name="stock_pool",
+                    pool_size=5,
+                    pool_reset_session=True,
+                    host=os.environ.get('DB_HOST'),
+                    user=os.environ.get('DB_USER'),
+                    password=os.environ.get('DB_PASSWORD'),
+                    database=os.environ.get('DB_NAME'),
+                    connection_timeout=10
+                )
+            except mysql.connector.Error as err:
+                print(f"Error creating connection pool: {err}")
+                return None
+
+        return _db_pool.get_connection()
     except mysql.connector.Error as err:
         print(f"Database connection error: {err}")
         return None

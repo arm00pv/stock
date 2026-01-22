@@ -15,6 +15,13 @@ This is the easiest way to deploy a test environment.
 6.  **Run Command**: The `Procfile` included in this repo will automatically set the run command to `gunicorn wsgi:application`.
 7.  **Workers**: To run background tasks (`scraper.py`, `enricher.py`), add them as "Worker" components in the App Platform settings, specifying the start command (e.g., `python scraper.py`).
 
+### Troubleshooting DigitalOcean Deployment (Error 1001)
+If you encounter **Error 1001 (DNS Resolution/Service Unavailable)**:
+1.  **Check Build Logs**: Go to the "Activity" tab in App Platform. If the build passed but the run failed, it's likely a crash on startup.
+2.  **Environment Variables**: Ensure `DB_HOST`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` are correctly set in the "Settings" > "Components" > "Env Vars" section. Missing vars cause DB connection failures.
+3.  **Port Binding**: The `Procfile` uses `$PORT`. Ensure DigitalOcean is routing traffic to that port.
+4.  **Health Check**: Configure the App Platform health check to use the `/health` endpoint instead of `/`. This isolates DB connection issues from general app startup issues.
+
 ---
 
 ## Option 2: Ubuntu Server (LAMP Stack)

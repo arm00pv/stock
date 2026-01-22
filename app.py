@@ -212,6 +212,12 @@ def get_daily_pick_response(category_key):
 # --- API Endpoints ---
 @app.route('/')
 def index(): return render_template('index.html')
+
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for load balancers."""
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()}), 200
+
 @app.route('/api/hot-stock')
 def api_hot_stock(): return get_daily_pick_response('hot_stock')
 @app.route('/api/penny-stock')
