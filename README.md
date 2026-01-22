@@ -75,6 +75,13 @@ python app.py
 ```
 Access at `http://127.0.0.1:5000`.
 
+### 6. Deployment (DigitalOcean)
+The application includes a `Procfile` for easy deployment on DigitalOcean App Platform.
+1. Connect your repo to DigitalOcean.
+2. Add a **MySQL** database component.
+3. Configure Environment Variables (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, etc.).
+4. The app will launch using `gunicorn`.
+
 ## Automated Background Tasks
 
 - **Enrichment**: `python enricher.py` (Batched updates for market cap/sector).

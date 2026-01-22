@@ -1,6 +1,23 @@
 # Deployment Guide
 
-This guide details the deployment of the Stock Picker application on an Ubuntu server using Apache2, MySQL, and WSGI.
+This guide details the deployment of the Stock Picker application on various platforms.
+
+## Option 1: DigitalOcean App Platform (PaaS)
+This is the easiest way to deploy a test environment.
+
+1.  **Repo Setup**: Ensure this repository is pushed to GitHub/GitLab.
+2.  **App Platform**: Create a new App in DigitalOcean.
+3.  **Source**: Select this repository.
+4.  **Configuration**:
+    *   **Environment Variables**: Add `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `SECRET_KEY`, `SCRAPER_API_KEY`.
+    *   **Database**: Add a Managed MySQL database to the app and link it.
+5.  **Build Command**: App Platform detects Python automatically. Ensure `requirements.txt` is present.
+6.  **Run Command**: The `Procfile` included in this repo will automatically set the run command to `gunicorn wsgi:application`.
+7.  **Workers**: To run background tasks (`scraper.py`, `enricher.py`), add them as "Worker" components in the App Platform settings, specifying the start command (e.g., `python scraper.py`).
+
+---
+
+## Option 2: Ubuntu Server (LAMP Stack)
 
 ## System Requirements
 - Ubuntu 20.04 or 22.04 LTS

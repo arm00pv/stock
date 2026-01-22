@@ -10,3 +10,4 @@ lxml
 scipy
 scikit-learn
 numpy
+gunicorn
