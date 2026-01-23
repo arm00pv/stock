@@ -39,7 +39,7 @@ The main interface is divided into tabs:
 - **Monthly Dividend**
 - **High Yield**
 - **Portfolios** (Main, Monthly, Daily, High Yield)
-- **Beta Features**
+- **AI & Analytics**
 
 ---
 
@@ -76,8 +76,8 @@ A detailed list of stocks currently owned:
 
 ---
 
-## 5. Beta Features (AI & Tools)
-Click the **AI Beta** tab to access advanced tools.
+## 5. AI & Analytics Tools
+Click the **AI & Analytics** tab to access advanced tools.
 
 ![Beta Features](example_pages/beta_features.png)
 

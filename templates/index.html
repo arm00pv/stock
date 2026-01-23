@@ -15,7 +15,7 @@
 <body>
     <!-- Navbar -->
     <nav class="navbar">
-        <div class="nav-brand"><i class="fas fa-chart-line"></i> StockPicker <span class="badge">PRO</span></div>
+        <div class="nav-brand"><i class="fas fa-chart-line"></i> StockPicker</div>
         <div class="nav-controls">
             <div id="timer-container"><i class="fas fa-clock"></i> <span id="countdown">Loading...</span></div>
             <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
@@ -26,11 +26,6 @@
     <div id="toast-container"></div>
 
     <div class="container">
-        <!-- Conditional Ad Banner -->
-        <div class="ad-banner" style="display: none;" id="ad-banner">
-            <p><i class="fas fa-crown"></i> Upgrade to Pro for Real-time Insights!</p>
-        </div>
-
         <div class="tabs-container">
             <div class="tabs">
                 <button class="tab-link active" onclick="openTab(event, 'HotStocks')"><i class="fas fa-fire"></i> Hot Stocks</button>
@@ -41,7 +36,7 @@
                 <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')"><i class="fas fa-piggy-bank"></i> Monthly Port</button>
                 <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')"><i class="fas fa-sun"></i> Daily Port</button>
                 <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')"><i class="fas fa-chart-pie"></i> HY Port</button>
-                <button class="tab-link" onclick="openTab(event, 'BetaFeatures')"><i class="fas fa-robot"></i> AI Beta</button>
+                <button class="tab-link" onclick="openTab(event, 'BetaFeatures')"><i class="fas fa-robot"></i> AI & Analytics</button>
             </div>
         </div>
 
@@ -107,7 +102,7 @@
         </div>
 
         <div id="BetaFeatures" class="tab-content">
-            <h1>Beta Features (AI & Advanced Analytics)</h1>
+            <h1>AI & Advanced Analytics</h1>
             <div class="beta-grid">
                 <div class="beta-card">
                     <h3>AI Chat Assistant</h3>
@@ -200,9 +195,6 @@
                 div.innerHTML = data.map(t => `<span style="font-size: ${12 + t.value/5}px; margin: 5px;">${t.text}</span>`).join(' ');
             }
         });
-
-        // Show ad banner for non-beta (simplified logic: always show for demo)
-        document.getElementById('ad-banner').style.display = 'block';
 
         function toggleTheme() {
             const body = document.body;

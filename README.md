@@ -18,7 +18,7 @@ This is a comprehensive Flask-based web application for stock discovery, portfol
 - **Real-time Valuation**: Uses `concurrent.futures.ThreadPoolExecutor` to fetch real-time prices for all holdings in parallel, ensuring fast page loads.
 - **Sell Flags**: Integrates with `sentiment_analyzer.py` to flag holdings with negative news sentiment.
 
-### 3. Beta Features (New!)
+### 3. AI & Analytics Tools
 - **AI Chat Assistant**: A regex-based AI assistant (`ai_assistant.py`) capable of answering questions about prices, risk, and analysis.
 - **Stock Prediction**: `ai_prediction.py` uses a Random Forest Regressor (`scikit-learn`) to forecast 7-day price trends based on historical SMA, Volume, and Returns.
 - **Smart Signals**: Calculates RSI and MACD indicators to provide Buy/Sell signals.

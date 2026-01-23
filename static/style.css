@@ -280,16 +280,6 @@ button:hover {
     width: 100px;
 }
 
-.ad-banner {
-    background: #fff3cd;
-    color: #856404;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 15px;
-    border: 1px solid #ffeeba;
-    text-align: center;
-    font-weight: bold;
-}
 /* Navbar */
 .navbar {
     display: flex;
