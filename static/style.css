@@ -20,7 +20,7 @@ body {
     padding: 20px;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: center; /* Center vertically */
     min-height: 100vh;
 }
 
