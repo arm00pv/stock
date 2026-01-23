@@ -19,11 +19,11 @@ This document encapsulates the architectural decisions, coding patterns, and "tr
 
 ## 2. Key Modules & Patterns
 
-### Beta Features (`beta_features.py`)
-- **Isolation**: New experimental features are encapsulated here to avoid bloating `app.py`.
+### AI & Analytics (`beta_features.py`)
+- **Isolation**: Advanced analytics features are encapsulated here to avoid bloating `app.py`.
 - **AI Prediction**: Uses `RandomForestRegressor`.
   - *Constraint*: Currently trains on-the-fly. For high scale, this should be moved to a background job that saves models/predictions to the DB.
-- **Error Handling**: Uses `try-except Exception` blocks to prevent beta features from crashing the main app.
+- **Error Handling**: Uses `try-except Exception` blocks to prevent analytics features from crashing the main app.
 
 ### Enrichment Pipeline (`enricher.py`)
 - **Batch Processing**: Uses `update_stock_details_batch` with `executemany` to avoid N+1 query performance killing.
