@@ -91,6 +91,8 @@ Ask questions about the market!
 ### Market Anomalies
 Click **"Scan for Anomalies"** to find stocks behaving unusually (e.g., sudden volume spikes or price drops). This is great for finding breakout candidates.
 
+![Anomalies Result](example_pages/anomalies_result.png)
+
 ### Stock Comparison
 Compare two stocks side-by-side.
 1. Enter the first ticker (e.g., `NVDA`).

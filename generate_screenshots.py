@@ -79,6 +79,19 @@ def generate_screenshots():
             page.screenshot(path=f"{output_dir}/chat_interaction.png")
             print(f"Saved {output_dir}/chat_interaction.png")
 
+            # 8. Anomalies Scan
+            print("Capturing Anomalies...")
+            # We are already on Beta tab.
+            # Click scan.
+            page.click("button:has-text('Scan for Anomalies')")
+            # Wait for results (ul li)
+            # Since we mock/use static data in beta_features for anomalies (or it returns empty if not mocked properly in e2e), we wait for 'Scanning...' to disappear or list to appear.
+            # The code sets innerHTML to 'Scanning...', then fetches.
+            # Let's wait for the spinner to go away or text content to change.
+            page.wait_for_timeout(2000) # Give it time to fetch
+            page.screenshot(path=f"{output_dir}/anomalies_result.png")
+            print(f"Saved {output_dir}/anomalies_result.png")
+
             # Mobile
             print("Capturing Mobile Dashboard...")
             mobile_page.goto("http://localhost:5000")
