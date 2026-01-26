@@ -46,6 +46,8 @@
             <div class="chart-container" style="position: relative; height:300px; width:100%">
                 <canvas id="hotStockChart"></canvas>
             </div>
+            <h3>Latest News</h3>
+            <div id="hot-stock-news" class="news-container"></div>
             <h2>Historical Picks</h2>
             <div id="hot-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
@@ -70,6 +72,7 @@
 
         <div id="PortfolioMain" class="tab-content">
             <h1>$5 a Week Portfolio</h1>
+            <button onclick="window.location.href='/api/portfolio/main/export'">Export CSV</button>
             <div id="portfolio-summary-main" class="portfolio-summary"></div>
             <h2>Holdings</h2>
             <div class="table-responsive">
@@ -116,6 +119,11 @@
                     <h3>Market Anomalies</h3>
                     <div id="anomalies-list"></div>
                     <button onclick="loadAnomalies()">Scan for Anomalies</button>
+                </div>
+                <div class="beta-card">
+                    <h3>Volume Spikes (>150%)</h3>
+                    <div id="volume-spikes-list"></div>
+                    <button onclick="loadVolumeSpikes()">Scan Volume</button>
                 </div>
                 <div class="beta-card">
                     <h3>Trending Topics</h3>
@@ -180,6 +188,49 @@
                 data.forEach(a => {
                     const li = document.createElement('li');
                     li.textContent = `${a.ticker}: ${a.reason}`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        function loadVolumeSpikes() {
+            const div = document.getElementById('volume-spikes-list');
+            div.innerHTML = 'Scanning...';
+            fetch('/api/beta/volume_spikes')
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No spikes detected.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(s => {
+                    const li = document.createElement('li');
+                    li.textContent = `${s.ticker}: Vol ${s.volume} (${s.ratio}x avg)`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        function loadNews(ticker) {
+            const div = document.getElementById('hot-stock-news');
+            if(!div) return;
+            div.innerHTML = 'Loading news...';
+            fetch(`/api/news/${ticker}`)
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No news available.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(n => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a href="${n.link}" target="_blank">${n.title}</a> <small>(${n.publisher})</small>`;
                     ul.appendChild(li);
                 });
                 div.appendChild(ul);
@@ -327,9 +378,10 @@
                     }
                     dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}${sentimentStar}</h2>`;
 
-                    // Render Chart if this is the Hot Stock tab
+                    // Render Chart and News if this is the Hot Stock tab
                     if (dailyPickId === 'hot-daily-pick' && data.ticker && !data.ticker.includes(' ')) {
                         renderChart(data.ticker);
+                        loadNews(data.ticker);
                     }
 
                     historicalPicksUl.innerHTML = '';

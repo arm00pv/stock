@@ -5,6 +5,7 @@ from scipy.stats import linregress
 from sklearn.ensemble import IsolationForest
 from ai_prediction import StockPredictor
 import random
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 # --- Utilities ---
@@ -368,3 +369,60 @@ def get_history_data(ticker):
     prices = df['Close'].tolist()
 
     return {'labels': labels, 'data': prices}
+
+# --- News Aggregator ---
+def get_stock_news(ticker):
+    """Fetches news for a specific ticker."""
+    try:
+        t = yf.Ticker(ticker)
+        news = t.news
+        formatted_news = []
+        if news:
+            for item in news[:5]: # Top 5 stories
+                formatted_news.append({
+                    'title': item.get('title'),
+                    'link': item.get('link'),
+                    'publisher': item.get('publisher'),
+                    'published': datetime.fromtimestamp(item.get('providerPublishTime', 0)).strftime('%Y-%m-%d %H:%M')
+                })
+        return formatted_news
+    except Exception as e:
+        print(f"Error fetching news for {ticker}: {e}")
+        return []
+
+# --- Volume Spikes Scanner ---
+def scan_volume_spikes():
+    """Scans for stocks with unusual volume."""
+    # We will scan the S&P 500 list from cache if available, or a default list
+    # For speed in this demo, we'll use a smaller subset or the 'hot_stock' candidates logic if we could access it.
+    # We'll use a static list of popular tickers for the 'beta' version.
+    tickers = ['AAPL', 'TSLA', 'NVDA', 'AMD', 'MSFT', 'GOOG', 'AMZN', 'META', 'NFLX', 'SPY', 'QQQ', 'IWM']
+
+    data = fetch_history(tickers, period='5d')
+    if data is None: return []
+
+    spikes = []
+    for ticker in tickers:
+        try:
+            if isinstance(data.columns, pd.MultiIndex):
+                hist = data[ticker]
+            else:
+                hist = data
+
+            if len(hist) < 2: continue
+
+            # Calculate average volume of previous days
+            avg_vol = hist['Volume'].iloc[:-1].mean()
+            today_vol = hist['Volume'].iloc[-1]
+
+            if avg_vol > 0 and today_vol > avg_vol * 1.5: # 150% volume
+                spikes.append({
+                    'ticker': ticker,
+                    'volume': int(today_vol),
+                    'avg_volume': int(avg_vol),
+                    'ratio': round(today_vol / avg_vol, 2)
+                })
+        except:
+            continue
+
+    return spikes

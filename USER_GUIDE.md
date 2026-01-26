@@ -52,6 +52,7 @@ Click on any of the first four tabs to see the **Pick of the Day**.
 - **The Ticker**: Displayed in large text (e.g., `AAPL`). Click it to open the Yahoo Finance page for that stock.
 - **Sentiment Star (★)**: If you see a green star, it means recent news sentiment for this stock is highly positive.
 - **Chart**: A price history chart appears below the ticker to show recent performance.
+- **News**: The latest headlines for the stock are listed below the chart.
 - **History**: A list of past picks is displayed below, allowing you to track how previous recommendations have performed.
 
 ---
@@ -92,6 +93,9 @@ Ask questions about the market!
 Click **"Scan for Anomalies"** to find stocks behaving unusually (e.g., sudden volume spikes or price drops). This is great for finding breakout candidates.
 
 ![Anomalies Result](example_pages/anomalies_result.png)
+
+### Volume Spikes
+Click **"Scan Volume"** to see stocks trading at significantly higher volume than their recent average (>150%). This often indicates major news or institutional activity.
 
 ### Stock Comparison
 Compare two stocks side-by-side.

@@ -378,6 +378,35 @@ def beta_compare():
 def api_history(ticker):
     return jsonify(beta_features.get_history_data(ticker))
 
+@app.route('/api/news/<ticker>')
+def api_news(ticker):
+    return jsonify(beta_features.get_stock_news(ticker))
+
+@app.route('/api/beta/volume_spikes')
+def beta_volume_spikes():
+    return jsonify(beta_features.scan_volume_spikes())
+
+@app.route('/api/portfolio/<portfolio_name>/export')
+def portfolio_export(portfolio_name):
+    holdings = get_portfolio_holdings(portfolio_name)
+    if not holdings: return "No holdings to export", 400
+
+    # Create CSV in memory
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Ticker', 'Shares', 'Purchase Price', 'Purchase Date', 'Sell Flag'])
+    for h in holdings:
+        writer.writerow([h['ticker'], h['shares'], h['purchase_price'], h['purchase_date'], h['sell_flag']])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={portfolio_name}_holdings.csv"}
+    )
+
 @app.route('/api/chat', methods=['POST'])
 def chat_endpoint():
     user_message = request.json.get('message', '')

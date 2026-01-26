@@ -12,17 +12,20 @@ This is a comprehensive Flask-based web application for stock discovery, portfol
 - **Dividend Picks**: Daily selections for Monthly Dividend and High-Yield categories.
 - **Efficient Caching**: Uses a custom LRU-style cache and `sp500_cache.json` to minimize external API calls.
 - **Ticker Deduplication**: Implements rigorous unique filtering (SELECT DISTINCT) to prevent duplicate processing.
+- **News Aggregator**: Automatically fetches top news stories for the daily hot pick.
 
 ### 2. Portfolio Management
 - **Automated Tracking**: Tracks "Main", "Monthly Dividend", "Daily Investment", and "High Yield" portfolios.
 - **Real-time Valuation**: Uses `concurrent.futures.ThreadPoolExecutor` to fetch real-time prices for all holdings in parallel, ensuring fast page loads.
 - **Sell Flags**: Integrates with `sentiment_analyzer.py` to flag holdings with negative news sentiment.
+- **CSV Export**: Download your portfolio holdings for external analysis.
 
 ### 3. AI & Analytics Tools
 - **AI Chat Assistant**: A regex-based AI assistant (`ai_assistant.py`) capable of answering questions about prices, risk, and analysis.
 - **Stock Prediction**: `ai_prediction.py` uses a Random Forest Regressor (`scikit-learn`) to forecast 7-day price trends based on historical SMA, Volume, and Returns.
 - **Smart Signals**: Calculates RSI and MACD indicators to provide Buy/Sell signals.
 - **Market Anomalies**: Uses Isolation Forest to detect unusual volume or price movement patterns.
+- **Volume Spikes**: Scans for stocks with volume > 150% of their 5-day average.
 - **Sector Rotation**: Analyzes ETF momentum to identify trending market sectors.
 
 ## Architecture & Technology
