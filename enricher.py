@@ -1,9 +1,10 @@
 import pandas as pd
 import yfinance as yf
 import time
-from database import get_tickers_by_category, get_db_connection
+from database import get_tickers_by_category, get_db_connection, update_stock_details_batch
 from dotenv import load_dotenv
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
@@ -27,28 +28,23 @@ def scrape_sp500_tickers():
         print(f"Could not scrape S&P 500 list: {e}")
         return set()
 
-def update_stock_details(ticker, market_cap, sector, is_sp500):
-    """Updates a single stock's details in the database."""
-    conn = get_db_connection()
-    if not conn: return
-    cursor = conn.cursor()
+def process_ticker(ticker, sp500_tickers):
+    """Fetches info for a single ticker."""
     try:
-        # Check if a row for this ticker already exists, if not, this will fail gracefully.
-        # A better approach would be to INSERT...ON DUPLICATE KEY UPDATE if the primary key was just the ticker.
-        # Given the composite key, a simple UPDATE is safer.
-        sql = """
-            UPDATE stocks
-            SET market_cap = %s, sector = %s, is_sp500 = %s
-            WHERE ticker = %s
-        """
-        cursor.execute(sql, (market_cap, sector, 1 if is_sp500 else 0, ticker))
-        conn.commit()
+        print(f"Enriching {ticker}...")
+        stock_info = yf.Ticker(ticker).info
+        market_cap = stock_info.get('marketCap')
+        sector = stock_info.get('sector')
+        is_sp500 = ticker in sp500_tickers
+
+        if market_cap or sector or is_sp500:
+            return (market_cap, sector, is_sp500, ticker)
+        else:
+            print(f"  -> No new info found for {ticker}.")
+            return None
     except Exception as e:
-        print(f"Error updating details for {ticker}: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+        print(f"  -> Error processing {ticker}: {e}")
+        return None
 
 def run_enrichment():
     """
@@ -67,29 +63,25 @@ def run_enrichment():
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
+    updates = []
 
-    for ticker in all_db_tickers:
-        try:
-            print(f"Enriching {ticker}...")
-            stock_info = yf.Ticker(ticker).info
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_ticker = {executor.submit(process_ticker, ticker, sp500_tickers): ticker for ticker in all_db_tickers}
 
-            market_cap = stock_info.get('marketCap')
-            sector = stock_info.get('sector')
-            is_sp500 = ticker in sp500_tickers
-
-            if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
+        for future in as_completed(future_to_ticker):
+            result = future.result()
+            if result:
+                updates.append(result)
                 enriched_count += 1
-            else:
-                print(f"  -> No new info found for {ticker}.")
 
-            # Add a delay to avoid rate limiting
-            time.sleep(2)
+                # Batch update every 50 records to prevent memory build up or large transactions
+                if len(updates) >= 50:
+                    update_stock_details_batch(updates)
+                    updates = []
 
-        except Exception as e:
-            print(f"  -> Error processing {ticker}: {e}")
-            # Also sleep on error to avoid hammering the API
-            time.sleep(2)
+    # Update remaining
+    if updates:
+        update_stock_details_batch(updates)
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
