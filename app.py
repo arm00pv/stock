@@ -13,7 +13,8 @@ load_dotenv()
 from database import (
     init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
     execute_investment, save_daily_pick, get_pick_history_for_category,
-    get_todays_pick_for_category, get_recently_picked_tickers
+    get_todays_pick_for_category, get_recently_picked_tickers,
+    get_watchlist, add_to_watchlist, remove_from_watchlist
 )
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
@@ -217,6 +218,34 @@ def index(): return render_template('index.html')
 def health_check():
     """Simple health check endpoint for load balancers."""
     return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()}), 200
+
+@app.route('/api/market-status')
+def api_market_status():
+    status = "Open" if is_market_open() else "Closed"
+    return jsonify({'status': status})
+
+@app.route('/api/watchlist', methods=['GET', 'POST', 'DELETE'])
+def api_watchlist():
+    if request.method == 'GET':
+        items = get_watchlist()
+        # Enrich with current price if possible (optional, keeping it simple for now)
+        return jsonify(items)
+    elif request.method == 'POST':
+        data = request.json
+        ticker = data.get('ticker')
+        if not ticker: return jsonify({'error': 'Ticker required'}), 400
+        if add_to_watchlist(ticker):
+            return jsonify({'message': f'Added {ticker}'}), 200
+        else:
+            return jsonify({'error': 'Failed to add'}), 500
+    elif request.method == 'DELETE':
+        data = request.json
+        ticker = data.get('ticker')
+        if not ticker: return jsonify({'error': 'Ticker required'}), 400
+        if remove_from_watchlist(ticker):
+            return jsonify({'message': f'Removed {ticker}'}), 200
+        else:
+            return jsonify({'error': 'Failed to remove'}), 500
 
 @app.route('/api/hot-stock')
 def api_hot_stock(): return get_daily_pick_response('hot_stock')

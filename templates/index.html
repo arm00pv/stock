@@ -17,6 +17,7 @@
     <nav class="navbar">
         <div class="nav-brand"><i class="fas fa-chart-line"></i> StockPicker</div>
         <div class="nav-controls">
+            <span id="market-status" class="market-status badge">Checking...</span>
             <div id="timer-container"><i class="fas fa-clock"></i> <span id="countdown">Loading...</span></div>
             <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
         </div>
@@ -37,6 +38,7 @@
                 <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')"><i class="fas fa-sun"></i> Daily Port</button>
                 <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')"><i class="fas fa-chart-pie"></i> HY Port</button>
                 <button class="tab-link" onclick="openTab(event, 'BetaFeatures')"><i class="fas fa-robot"></i> AI & Analytics</button>
+                <button class="tab-link" onclick="openTab(event, 'Watchlist')"><i class="fas fa-star"></i> Watchlist</button>
             </div>
         </div>
 
@@ -102,6 +104,15 @@
             <div class="table-responsive">
                 <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
             </div>
+        </div>
+
+        <div id="Watchlist" class="tab-content">
+            <h1>My Watchlist</h1>
+            <div class="add-ticker-container">
+                <input type="text" id="watchlist-input" placeholder="Enter Ticker (e.g. NVDA)">
+                <button onclick="addToWatchlistManual()">Add</button>
+            </div>
+            <div id="watchlist-container" class="beta-grid" style="margin-top: 20px;"></div>
         </div>
 
         <div id="BetaFeatures" class="tab-content">
@@ -332,7 +343,10 @@
             if (!ticker || ticker.includes('Error') || ticker.includes('No suitable stock')) {
                 return `<span>${ticker}</span>`;
             }
-            return `<a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>`;
+            return `
+                <a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>
+                <button class="icon-btn" onclick="addToWatchlist('${ticker}')" title="Add to Watchlist"><i class="far fa-star"></i></button>
+            `;
         }
 
         let hotStockChartInstance = null;
@@ -466,8 +480,83 @@
             setInterval(update, 1000);
         }
 
+        function updateMarketStatus() {
+            fetch('/api/market-status')
+            .then(r => r.json())
+            .then(data => {
+                const el = document.getElementById('market-status');
+                el.textContent = `Market: ${data.status}`;
+                if(data.status === 'Open') el.style.backgroundColor = 'var(--success-color)';
+                else el.style.backgroundColor = 'var(--secondary-color)';
+            });
+        }
+
+        function loadWatchlist() {
+            const container = document.getElementById('watchlist-container');
+            container.innerHTML = 'Loading...';
+            fetch('/api/watchlist')
+            .then(r => r.json())
+            .then(data => {
+                container.innerHTML = '';
+                if(data.length === 0) {
+                    container.innerHTML = '<p>No stocks in watchlist.</p>';
+                    return;
+                }
+                data.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'beta-card';
+                    card.innerHTML = `
+                        <h3>${item.ticker}</h3>
+                        <p>Added: ${item.date_added}</p>
+                        <button onclick="removeFromWatchlist('${item.ticker}')" style="background-color: var(--danger-color)">Remove</button>
+                    `;
+                    container.appendChild(card);
+                });
+            });
+        }
+
+        function addToWatchlist(ticker) {
+            fetch('/api/watchlist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ticker: ticker})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.error) showToast(data.error, 'error');
+                else {
+                    showToast(`Added ${ticker} to Watchlist`, 'success');
+                    loadWatchlist();
+                }
+            });
+        }
+
+        function addToWatchlistManual() {
+            const input = document.getElementById('watchlist-input');
+            const ticker = input.value.trim().toUpperCase();
+            if(ticker) {
+                addToWatchlist(ticker);
+                input.value = '';
+            }
+        }
+
+        function removeFromWatchlist(ticker) {
+            fetch('/api/watchlist', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ticker: ticker})
+            })
+            .then(r => r.json())
+            .then(data => {
+                showToast(`Removed ${ticker}`, 'info');
+                loadWatchlist();
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             startCountdown();
+            updateMarketStatus();
+            loadWatchlist();
             populatePicks("{{ url_for('api_hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
             populatePicks("{{ url_for('api_penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');

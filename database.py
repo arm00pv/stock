@@ -37,6 +37,14 @@ def init_db():
     if not conn: return
     cursor = conn.cursor()
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS watchlist (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ticker VARCHAR(20) NOT NULL,
+            date_added DATE NOT NULL,
+            UNIQUE KEY unique_watchlist (ticker)
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS stocks (
             ticker VARCHAR(20) NOT NULL,
             category VARCHAR(50) NOT NULL,
@@ -88,6 +96,51 @@ def save_daily_pick(category, ticker, sentiment_score=None):
         conn.commit()
     except mysql.connector.Error as err:
         print(f"Error saving daily pick: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_watchlist():
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT ticker, date_added FROM watchlist ORDER BY date_added DESC")
+        return cursor.fetchall()
+    except mysql.connector.Error as e:
+        print(f"Error fetching watchlist: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+def add_to_watchlist(ticker):
+    conn = get_db_connection()
+    if not conn: return False
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        cursor.execute("INSERT INTO watchlist (ticker, date_added) VALUES (%s, %s) ON DUPLICATE KEY UPDATE date_added=date_added", (ticker, today_str))
+        conn.commit()
+        return True
+    except mysql.connector.Error as e:
+        print(f"Error adding to watchlist: {e}")
+        return False
+    finally:
+        cursor.close()
+        conn.close()
+
+def remove_from_watchlist(ticker):
+    conn = get_db_connection()
+    if not conn: return False
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM watchlist WHERE ticker = %s", (ticker,))
+        conn.commit()
+        return True
+    except mysql.connector.Error as e:
+        print(f"Error removing from watchlist: {e}")
+        return False
     finally:
         cursor.close()
         conn.close()
