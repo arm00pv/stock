@@ -4,6 +4,7 @@ import time
 from database import get_tickers_by_category, get_db_connection
 from dotenv import load_dotenv
 import requests
+import concurrent.futures
 
 load_dotenv()
 
@@ -50,6 +51,36 @@ def update_stock_details(ticker, market_cap, sector, is_sp500):
         cursor.close()
         conn.close()
 
+def process_ticker(ticker, sp500_tickers):
+    """
+    Fetches data for a single ticker and updates the database.
+    Returns True if the ticker was enriched (updated), False otherwise.
+    """
+    try:
+        print(f"Enriching {ticker}...")
+        stock_info = yf.Ticker(ticker).info
+
+        market_cap = stock_info.get('marketCap')
+        sector = stock_info.get('sector')
+        is_sp500 = ticker in sp500_tickers
+
+        updated = False
+        if market_cap or sector or is_sp500:
+            update_stock_details(ticker, market_cap, sector, is_sp500)
+            updated = True
+        else:
+            print(f"  -> No new info found for {ticker}.")
+
+        # Add a small delay to respect rate limits, but distributed across threads
+        time.sleep(1)
+        return updated
+
+    except Exception as e:
+        print(f"  -> Error processing {ticker}: {e}")
+        # Also sleep on error
+        time.sleep(1)
+        return False
+
 def run_enrichment():
     """
     Goes through all securities in the 'stocks' table and enriches them
@@ -68,28 +99,20 @@ def run_enrichment():
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
 
-    for ticker in all_db_tickers:
-        try:
-            print(f"Enriching {ticker}...")
-            stock_info = yf.Ticker(ticker).info
+    # We use a ThreadPoolExecutor to parallelize the enrichment.
+    # We limit max_workers to avoid overwhelming the API or the database.
+    MAX_WORKERS = 3
 
-            market_cap = stock_info.get('marketCap')
-            sector = stock_info.get('sector')
-            is_sp500 = ticker in sp500_tickers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_ticker = {executor.submit(process_ticker, ticker, sp500_tickers): ticker for ticker in all_db_tickers}
 
-            if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
-                enriched_count += 1
-            else:
-                print(f"  -> No new info found for {ticker}.")
-
-            # Add a delay to avoid rate limiting
-            time.sleep(2)
-
-        except Exception as e:
-            print(f"  -> Error processing {ticker}: {e}")
-            # Also sleep on error to avoid hammering the API
-            time.sleep(2)
+        for future in concurrent.futures.as_completed(future_to_ticker):
+            # ticker = future_to_ticker[future]
+            try:
+                if future.result():
+                    enriched_count += 1
+            except Exception as exc:
+                print(f'Ticker generated an exception: {exc}')
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
