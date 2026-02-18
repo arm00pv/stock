@@ -4,27 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stock Picks</title>
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div id="timer-container">
-            Next pick in: <span id="countdown"></span>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-brand"><i class="fas fa-chart-line"></i> StockPicker</div>
+        <div class="nav-controls">
+            <span id="market-status" class="market-status badge">Checking...</span>
+            <div id="timer-container"><i class="fas fa-clock"></i> <span id="countdown">Loading...</span></div>
+            <button id="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
         </div>
-        <div class="tabs">
-            <button class="tab-link active" onclick="openTab(event, 'HotStocks')">Hot Stocks</button>
-            <button class="tab-link" onclick="openTab(event, 'PennyStocks')">$5 or Less</button>
-            <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')">Monthly Dividend</button>
-            <button class="tab-link" onclick="openTab(event, 'HighYield')">High Yield</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMain')">$5 Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')">$5 Monthly Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')">$5 Daily Portfolio</button>
-            <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')">$5 High Yield Portfolio</button>
+    </nav>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <div class="container">
+        <div class="tabs-container">
+            <div class="tabs">
+                <button class="tab-link active" onclick="openTab(event, 'HotStocks')"><i class="fas fa-fire"></i> Hot Stocks</button>
+                <button class="tab-link" onclick="openTab(event, 'PennyStocks')"><i class="fas fa-coins"></i> Penny</button>
+                <button class="tab-link" onclick="openTab(event, 'MonthlyDividend')"><i class="fas fa-calendar-alt"></i> Monthly Div</button>
+                <button class="tab-link" onclick="openTab(event, 'HighYield')"><i class="fas fa-percentage"></i> High Yield</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioMain')"><i class="fas fa-briefcase"></i> Main</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioMonthly')"><i class="fas fa-piggy-bank"></i> Monthly Port</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioDaily')"><i class="fas fa-sun"></i> Daily Port</button>
+                <button class="tab-link" onclick="openTab(event, 'PortfolioHighYield')"><i class="fas fa-chart-pie"></i> HY Port</button>
+                <button class="tab-link" onclick="openTab(event, 'BetaFeatures')"><i class="fas fa-robot"></i> AI & Analytics</button>
+                <button class="tab-link" onclick="openTab(event, 'Watchlist')"><i class="fas fa-star"></i> Watchlist</button>
+            </div>
         </div>
 
         <div id="HotStocks" class="tab-content" style="display:block;">
             <h1>Hot Stock of the Day</h1>
             <div id="hot-daily-pick" class="daily-pick-container"></div>
+            <div class="chart-container" style="position: relative; height:300px; width:100%">
+                <canvas id="hotStockChart"></canvas>
+            </div>
+            <h3>Latest News</h3>
+            <div id="hot-stock-news" class="news-container"></div>
             <h2>Historical Picks</h2>
             <div id="hot-historical-picks" class="historical-picks-container"><ul></ul></div>
         </div>
@@ -49,29 +74,256 @@
 
         <div id="PortfolioMain" class="tab-content">
             <h1>$5 a Week Portfolio</h1>
+            <button onclick="window.location.href='/api/portfolio/main/export'">Export CSV</button>
             <div id="portfolio-summary-main" class="portfolio-summary"></div>
             <h2>Holdings</h2>
-            <table id="portfolio-holdings-main"><thead></thead><tbody></tbody></table>
+            <div class="table-responsive">
+                <table id="portfolio-holdings-main"><thead></thead><tbody></tbody></table>
+            </div>
         </div>
         <div id="PortfolioMonthly" class="tab-content">
             <h1>$5 a Week Monthly Dividends Portfolio</h1>
             <div id="portfolio-summary-monthly_dividend" class="portfolio-summary"></div>
             <h2>Holdings</h2>
-            <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
+            <div class="table-responsive">
+                <table id="portfolio-holdings-monthly_dividend"><thead></thead><tbody></tbody></table>
+            </div>
         </div>
         <div id="PortfolioDaily" class="tab-content">
             <h1>$5 Daily Portfolio (Trading Days Only)</h1>
             <div id="portfolio-summary-daily_investment" class="portfolio-summary"></div>
             <h2>Holdings</h2>
-            <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
+            <div class="table-responsive">
+                <table id="portfolio-holdings-daily_investment"><thead></thead><tbody></tbody></table>
+            </div>
         </div>
         <div id="PortfolioHighYield" class="tab-content">
             <h1>$5 a Week High Yield Portfolio</h1>
             <div id="portfolio-summary-high_yield_investment" class="portfolio-summary"></div>
             <h2>Holdings</h2>
-            <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
+            <div class="table-responsive">
+                <table id="portfolio-holdings-high_yield_investment"><thead></thead><tbody></tbody></table>
+            </div>
+        </div>
+
+        <div id="Watchlist" class="tab-content">
+            <h1>My Watchlist</h1>
+            <div class="add-ticker-container">
+                <input type="text" id="watchlist-input" placeholder="Enter Ticker (e.g. NVDA)">
+                <button onclick="addToWatchlistManual()">Add</button>
+            </div>
+            <div id="watchlist-container" class="beta-grid" style="margin-top: 20px;"></div>
+        </div>
+
+        <div id="BetaFeatures" class="tab-content">
+            <h1>AI & Advanced Analytics</h1>
+            <div class="beta-grid">
+                <div class="beta-card">
+                    <h3>AI Chat Assistant</h3>
+                    <div id="chat-widget">
+                        <div id="chat-messages" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; margin-bottom: 10px; padding: 5px;"></div>
+                        <input type="text" id="chat-input" placeholder="Ask me about stocks...">
+                        <button onclick="sendMessage()">Send</button>
+                    </div>
+                </div>
+                <div class="beta-card">
+                    <h3>Market Anomalies</h3>
+                    <div id="anomalies-list"></div>
+                    <button onclick="loadAnomalies()">Scan for Anomalies</button>
+                </div>
+                <div class="beta-card">
+                    <h3>Volume Spikes (>150%)</h3>
+                    <div id="volume-spikes-list"></div>
+                    <button onclick="loadVolumeSpikes()">Scan Volume</button>
+                </div>
+                <div class="beta-card">
+                    <h3>Trending Topics</h3>
+                    <div id="trending-topics"></div>
+                </div>
+                <div class="beta-card" style="grid-column: span 3;">
+                    <h3>Stock Comparison</h3>
+                    <input type="text" id="comp-t1" placeholder="Ticker 1 (e.g. AAPL)">
+                    <input type="text" id="comp-t2" placeholder="Ticker 2 (e.g. MSFT)">
+                    <button onclick="compareStocks()">Compare</button>
+                    <div id="comparison-result"></div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Chat Widget Logic -->
+    <script>
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatBox = document.getElementById('chat-messages');
+
+            // User message (sanitized via textContent)
+            const userDiv = document.createElement('div');
+            userDiv.className = 'message user';
+            userDiv.textContent = 'You: ' + message;
+            chatBox.appendChild(userDiv);
+
+            input.value = '';
+
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message})
+            })
+            .then(r => r.json())
+            .then(data => {
+                const botDiv = document.createElement('div');
+                botDiv.className = 'message bot';
+                // Allow innerHTML for bot to format links/bold/etc safely controlled by backend
+                botDiv.innerHTML = 'AI: ' + data.response;
+                chatBox.appendChild(botDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+
+        function loadAnomalies() {
+            const div = document.getElementById('anomalies-list');
+            div.innerHTML = 'Scanning...';
+            fetch('/api/beta/anomalies')
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No anomalies detected.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(a => {
+                    const li = document.createElement('li');
+                    li.textContent = `${a.ticker}: ${a.reason}`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        function loadVolumeSpikes() {
+            const div = document.getElementById('volume-spikes-list');
+            div.innerHTML = 'Scanning...';
+            fetch('/api/beta/volume_spikes')
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No spikes detected.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(s => {
+                    const li = document.createElement('li');
+                    li.textContent = `${s.ticker}: Vol ${s.volume} (${s.ratio}x avg)`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        function loadNews(ticker) {
+            const div = document.getElementById('hot-stock-news');
+            if(!div) return;
+            div.innerHTML = 'Loading news...';
+            fetch(`/api/news/${ticker}`)
+            .then(r => r.json())
+            .then(data => {
+                div.innerHTML = '';
+                if(data.length === 0) {
+                    div.innerHTML = 'No news available.';
+                    return;
+                }
+                const ul = document.createElement('ul');
+                data.forEach(n => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a href="${n.link}" target="_blank">${n.title}</a> <small>(${n.publisher})</small>`;
+                    ul.appendChild(li);
+                });
+                div.appendChild(ul);
+            });
+        }
+
+        // Load trending on tab open or page load
+        fetch('/api/beta/trending')
+        .then(r => r.json())
+        .then(data => {
+            const div = document.getElementById('trending-topics');
+            if(div) {
+                div.innerHTML = data.map(t => `<span style="font-size: ${12 + t.value/5}px; margin: 5px;">${t.text}</span>`).join(' ');
+            }
+        });
+
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.getElementById('theme-toggle');
+            const icon = btn.querySelector('i');
+
+            body.classList.toggle('dark-mode');
+            if (body.classList.contains('dark-mode')) {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = message;
+
+            container.appendChild(toast);
+
+            // Trigger reflow for animation
+            void toast.offsetWidth;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function compareStocks() {
+            const t1 = document.getElementById('comp-t1').value;
+            const t2 = document.getElementById('comp-t2').value;
+            if(!t1 || !t2) {
+                showToast("Please enter two tickers.", "error");
+                return;
+            }
+
+            const div = document.getElementById('comparison-result');
+            div.innerHTML = '<div class="spinner"></div>';
+
+            fetch(`/api/beta/compare?ticker1=${t1}&ticker2=${t2}`)
+            .then(r => r.json())
+            .then(data => {
+                if(data.error) {
+                    div.innerHTML = `Error: ${data.error}`;
+                    showToast("Comparison failed", "error");
+                    return;
+                }
+                showToast("Comparison Complete", "success");
+                const m1 = data.ticker1;
+                const m2 = data.ticker2;
+
+                div.innerHTML = `
+                    <table style="width:100%; text-align:left;">
+                        <tr><th>Metric</th><th>${m1.ticker}</th><th>${m2.ticker}</th></tr>
+                        <tr><td>Price</td><td>$${m1.price}</td><td>$${m2.price}</td></tr>
+                        <tr><td>PE Ratio</td><td>${m1.pe_ratio}</td><td>${m2.pe_ratio}</td></tr>
+                        <tr><td>Beta</td><td>${m1.beta}</td><td>${m2.beta}</td></tr>
+                        <tr><td>Volatility</td><td>${m1.volatility}%</td><td>${m2.volatility}%</td></tr>
+                    </table>
+                `;
+            });
+        }
+    </script>
 
     <script>
         const API_BASE_URL = "{{ url_for('index', _external=False) }}";
@@ -91,7 +343,36 @@
             if (!ticker || ticker.includes('Error') || ticker.includes('No suitable stock')) {
                 return `<span>${ticker}</span>`;
             }
-            return `<a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>`;
+            return `
+                <a href="https://finance.yahoo.com/quote/${ticker}" class="ticker-link" target="_blank">${ticker}</a>
+                <button class="icon-btn" onclick="addToWatchlist('${ticker}')" title="Add to Watchlist"><i class="far fa-star"></i></button>
+            `;
+        }
+
+        let hotStockChartInstance = null;
+
+        function renderChart(ticker) {
+            if (!ticker) return;
+            fetch(`/api/history/${ticker}`)
+            .then(r => r.json())
+            .then(data => {
+                const ctx = document.getElementById('hotStockChart').getContext('2d');
+                if (hotStockChartInstance) hotStockChartInstance.destroy();
+
+                hotStockChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: `${ticker} Price History`,
+                            data: data.data,
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            });
         }
 
         function populatePicks(endpoint, dailyPickId, historicalPicksId) {
@@ -110,6 +391,12 @@
                         sentimentStar = '<span class="sentiment-star">★</span>';
                     }
                     dailyPickDiv.innerHTML = `<h2>${createTickerLink(data.ticker)}${sentimentStar}</h2>`;
+
+                    // Render Chart and News if this is the Hot Stock tab
+                    if (dailyPickId === 'hot-daily-pick' && data.ticker && !data.ticker.includes(' ')) {
+                        renderChart(data.ticker);
+                        loadNews(data.ticker);
+                    }
 
                     historicalPicksUl.innerHTML = '';
                     if (data.history && data.history.length > 0) {
@@ -193,8 +480,83 @@
             setInterval(update, 1000);
         }
 
+        function updateMarketStatus() {
+            fetch('/api/market-status')
+            .then(r => r.json())
+            .then(data => {
+                const el = document.getElementById('market-status');
+                el.textContent = `Market: ${data.status}`;
+                if(data.status === 'Open') el.style.backgroundColor = 'var(--success-color)';
+                else el.style.backgroundColor = 'var(--secondary-color)';
+            });
+        }
+
+        function loadWatchlist() {
+            const container = document.getElementById('watchlist-container');
+            container.innerHTML = 'Loading...';
+            fetch('/api/watchlist')
+            .then(r => r.json())
+            .then(data => {
+                container.innerHTML = '';
+                if(data.length === 0) {
+                    container.innerHTML = '<p>No stocks in watchlist.</p>';
+                    return;
+                }
+                data.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'beta-card';
+                    card.innerHTML = `
+                        <h3>${item.ticker}</h3>
+                        <p>Added: ${item.date_added}</p>
+                        <button onclick="removeFromWatchlist('${item.ticker}')" style="background-color: var(--danger-color)">Remove</button>
+                    `;
+                    container.appendChild(card);
+                });
+            });
+        }
+
+        function addToWatchlist(ticker) {
+            fetch('/api/watchlist', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ticker: ticker})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.error) showToast(data.error, 'error');
+                else {
+                    showToast(`Added ${ticker} to Watchlist`, 'success');
+                    loadWatchlist();
+                }
+            });
+        }
+
+        function addToWatchlistManual() {
+            const input = document.getElementById('watchlist-input');
+            const ticker = input.value.trim().toUpperCase();
+            if(ticker) {
+                addToWatchlist(ticker);
+                input.value = '';
+            }
+        }
+
+        function removeFromWatchlist(ticker) {
+            fetch('/api/watchlist', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ticker: ticker})
+            })
+            .then(r => r.json())
+            .then(data => {
+                showToast(`Removed ${ticker}`, 'info');
+                loadWatchlist();
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             startCountdown();
+            updateMarketStatus();
+            loadWatchlist();
             populatePicks("{{ url_for('api_hot_stock') }}", 'hot-daily-pick', 'hot-historical-picks');
             populatePicks("{{ url_for('api_penny_stock') }}", 'penny-daily-pick', 'penny-historical-picks');
             populatePicks("{{ url_for('api_monthly_dividend_stock') }}", 'monthly-daily-pick', 'monthly-historical-picks');

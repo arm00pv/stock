@@ -6,13 +6,15 @@ import pandas as pd
 from flask import Flask, render_template, jsonify, request, abort
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+from concurrent.futures import ThreadPoolExecutor
 
 load_dotenv()
 
 from database import (
     init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
     execute_investment, save_daily_pick, get_pick_history_for_category,
-    get_todays_pick_for_category, get_recently_picked_tickers
+    get_todays_pick_for_category, get_recently_picked_tickers,
+    get_watchlist, add_to_watchlist, remove_from_watchlist
 )
 from scraper import run_scraper_pipeline
 from sentiment_analyzer import get_sentiment_for_tickers, run_sentiment_analysis
@@ -20,12 +22,20 @@ from performance_tracker import run_performance_check
 from enricher import run_enrichment
 from utils import is_market_open
 from cache import get as get_from_cache, set as set_in_cache
+import beta_features
+from ai_assistant import get_ai_response
 
 app = Flask(__name__)
 
 # --- Configuration ---
 SCRAPER_API_KEY = os.environ.get('SCRAPER_API_KEY', 'your-super-secret-key')
 app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+app.config['DEBUG'] = os.environ.get('FLASK_DEBUG', '0') == '1'
+app.config['SESSION_COOKIE_NAME'] = os.environ.get('SESSION_COOKIE_NAME', 'session')
+app.config['SESSION_COOKIE_PATH'] = os.environ.get('SESSION_COOKIE_PATH', '/')
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # --- Constants ---
 MIN_AVG_VOLUME = 100000
@@ -203,6 +213,40 @@ def get_daily_pick_response(category_key):
 # --- API Endpoints ---
 @app.route('/')
 def index(): return render_template('index.html')
+
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for load balancers."""
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()}), 200
+
+@app.route('/api/market-status')
+def api_market_status():
+    status = "Open" if is_market_open() else "Closed"
+    return jsonify({'status': status})
+
+@app.route('/api/watchlist', methods=['GET', 'POST', 'DELETE'])
+def api_watchlist():
+    if request.method == 'GET':
+        items = get_watchlist()
+        # Enrich with current price if possible (optional, keeping it simple for now)
+        return jsonify(items)
+    elif request.method == 'POST':
+        data = request.json
+        ticker = data.get('ticker')
+        if not ticker: return jsonify({'error': 'Ticker required'}), 400
+        if add_to_watchlist(ticker):
+            return jsonify({'message': f'Added {ticker}'}), 200
+        else:
+            return jsonify({'error': 'Failed to add'}), 500
+    elif request.method == 'DELETE':
+        data = request.json
+        ticker = data.get('ticker')
+        if not ticker: return jsonify({'error': 'Ticker required'}), 400
+        if remove_from_watchlist(ticker):
+            return jsonify({'message': f'Removed {ticker}'}), 200
+        else:
+            return jsonify({'error': 'Failed to remove'}), 500
+
 @app.route('/api/hot-stock')
 def api_hot_stock(): return get_daily_pick_response('hot_stock')
 @app.route('/api/penny-stock')
@@ -216,20 +260,37 @@ def api_high_yield_dividend_stock(): return get_daily_pick_response('high_yield_
 def portfolio_data(portfolio_name):
     summary = get_portfolio_summary(portfolio_name)
     holdings = get_portfolio_holdings(portfolio_name)
+
+    # Use ThreadPoolExecutor for parallel price fetching
+    def fetch_price(holding):
+        ticker = holding['ticker']
+        cached = get_from_cache(ticker)
+        if cached:
+            return ticker, cached
+        try:
+            # Fallback to purchase price if fetch fails
+            price = yf.Ticker(ticker).info.get('regularMarketPrice')
+            if price:
+                set_in_cache(ticker, price)
+                return ticker, price
+        except:
+            pass
+        return ticker, holding['purchase_price']
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        prices = dict(executor.map(fetch_price, holdings))
+
     total_value = 0
     detailed_holdings = []
     for holding in holdings:
         ticker = holding['ticker']
-        current_price = get_from_cache(ticker)
-        if current_price is None:
-            try:
-                current_price = yf.Ticker(ticker).info.get('regularMarketPrice', holding['purchase_price'])
-                if current_price: set_in_cache(ticker, current_price)
-            except Exception:
-                current_price = holding['purchase_price']
+        current_price = prices.get(ticker, holding['purchase_price'])
+        if current_price is None: current_price = holding['purchase_price'] # Safety net
+
         value = holding['shares'] * current_price
         total_value += value
         detailed_holdings.append({**holding, 'current_price': current_price, 'current_value': value})
+
     return jsonify({'portfolio_name': portfolio_name, 'cash_balance': summary[0], 'total_invested': summary[1], 'current_market_value': total_value, 'total_assets': summary[0] + total_value, 'holdings': detailed_holdings})
 
 @app.route('/api/trigger-investment/<portfolio_name>', methods=['POST'])
@@ -291,3 +352,93 @@ def run_enrichment_api():
     if request.headers.get('X-API-Key') != SCRAPER_API_KEY: abort(401)
     try: run_enrichment(); return jsonify({'status': 'success', 'message': 'Data enrichment executed.'})
     except Exception as e: return jsonify({'status': 'error', 'message': f'An error occurred: {e}'}), 500
+
+# --- Beta Endpoints ---
+@app.route('/api/beta/signals/<ticker>')
+def beta_signals(ticker):
+    return jsonify(beta_features.calculate_smart_signals(ticker))
+
+@app.route('/api/beta/anomalies')
+def beta_anomalies():
+    # Detect anomalies in recently active tickers or a subset
+    tickers = ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'TSLA', 'SPY', 'QQQ', 'NVDA'] # Sample
+    return jsonify(beta_features.detect_anomalies(tickers))
+
+@app.route('/api/beta/patterns/<ticker>')
+def beta_patterns(ticker):
+    return jsonify(beta_features.scan_patterns(ticker))
+
+@app.route('/api/beta/sector-rotation')
+def beta_sector_rotation():
+    return jsonify(beta_features.sector_rotation_analysis())
+
+@app.route('/api/beta/thesis/<ticker>')
+def beta_thesis(ticker):
+    return jsonify(beta_features.generate_trade_thesis(ticker))
+
+@app.route('/api/beta/pro/<ticker>')
+def beta_pro_details(ticker):
+    return jsonify(beta_features.get_pro_details(ticker))
+
+@app.route('/api/beta/trending')
+def beta_trending():
+    return jsonify(beta_features.get_trending_topics())
+
+@app.route('/api/beta/correlation', methods=['POST'])
+def beta_correlation():
+    tickers = request.json.get('tickers', [])
+    if not tickers: return jsonify({'error': 'No tickers provided'}), 400
+    return jsonify(beta_features.get_correlation_matrix(tickers))
+
+@app.route('/api/beta/efficient-frontier', methods=['POST'])
+def beta_efficient_frontier():
+    tickers = request.json.get('tickers', [])
+    if not tickers: return jsonify({'error': 'No tickers provided'}), 400
+    return jsonify(beta_features.simulate_efficient_frontier(tickers))
+
+@app.route('/api/beta/compare')
+def beta_compare():
+    t1 = request.args.get('ticker1')
+    t2 = request.args.get('ticker2')
+    if not t1 or not t2: return jsonify({'error': 'Missing tickers'}), 400
+    return jsonify(beta_features.compare_stocks(t1, t2))
+
+@app.route('/api/history/<ticker>')
+def api_history(ticker):
+    return jsonify(beta_features.get_history_data(ticker))
+
+@app.route('/api/news/<ticker>')
+def api_news(ticker):
+    return jsonify(beta_features.get_stock_news(ticker))
+
+@app.route('/api/beta/volume_spikes')
+def beta_volume_spikes():
+    return jsonify(beta_features.scan_volume_spikes())
+
+@app.route('/api/portfolio/<portfolio_name>/export')
+def portfolio_export(portfolio_name):
+    holdings = get_portfolio_holdings(portfolio_name)
+    if not holdings: return "No holdings to export", 400
+
+    # Create CSV in memory
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Ticker', 'Shares', 'Purchase Price', 'Purchase Date', 'Sell Flag'])
+    for h in holdings:
+        writer.writerow([h['ticker'], h['shares'], h['purchase_price'], h['purchase_date'], h['sell_flag']])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={portfolio_name}_holdings.csv"}
+    )
+
+@app.route('/api/chat', methods=['POST'])
+def chat_endpoint():
+    user_message = request.json.get('message', '')
+    if not user_message: return jsonify({'response': 'Please say something.'})
+    response = get_ai_response(user_message)
+    return jsonify({'response': response})
