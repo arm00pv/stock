@@ -224,6 +224,30 @@ def set_sell_flag(ticker, flag_value):
         cursor.close()
         conn.close()
 
+def set_sell_flags_batch(updates):
+    """
+    Updates sell flags for multiple tickers in a single batch.
+    updates: List of tuples (ticker, flag_value)
+    """
+    if not updates:
+        return
+
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = "UPDATE portfolio_transactions SET sell_flag = %s WHERE ticker = %s"
+        # Prepare data: (sell_flag (0 or 1), ticker)
+        data = [(1 if flag else 0, ticker) for ticker, flag in updates]
+        cursor.executemany(sql, data)
+        conn.commit()
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"Database error during batch sell_flag update: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 def execute_investment(portfolio_name, ticker, shares, price, investment_amount):
     conn = get_db_connection()
     if not conn: return
