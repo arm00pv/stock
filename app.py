@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import (
-    init_db, get_tickers_by_category, get_portfolio_summary, get_portfolio_holdings,
+    init_db, get_tickers_by_category, get_tickers_by_categories, get_portfolio_summary, get_portfolio_holdings,
     execute_investment, save_daily_pick, get_pick_history_for_category,
     get_todays_pick_for_category, get_recently_picked_tickers
 )
@@ -48,9 +48,7 @@ def find_growth_candidate(categories_to_search, price_limit=None):
     print(f"Params: categories={categories_to_search}, price_limit={price_limit}")
 
     # 1. Fetch all unique tickers from the database
-    all_tickers = []
-    for category in categories_to_search:
-        all_tickers.extend(get_tickers_by_category(category))
+    all_tickers = get_tickers_by_categories(categories_to_search)
     unique_tickers = sorted(list(set(all_tickers)))
     print(f"Found {len(unique_tickers)} unique tickers to screen.")
 
