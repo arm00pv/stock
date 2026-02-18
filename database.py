@@ -173,6 +173,29 @@ def update_tickers_from_source(tickers, category, source_url):
         cursor.close()
         conn.close()
 
+def update_stock_details_batch(updates):
+    """
+    Updates multiple stocks' details in the database using batch processing.
+    updates: list of tuples (market_cap, sector, is_sp500, ticker)
+    """
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = """
+            UPDATE stocks
+            SET market_cap = %s, sector = %s, is_sp500 = %s
+            WHERE ticker = %s
+        """
+        cursor.executemany(sql, updates)
+        conn.commit()
+    except mysql.connector.Error as e:
+        print(f"Error updating batch details: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
 def prune_old_tickers(days_old=30):
     conn = get_db_connection()
     if not conn: return
