@@ -96,13 +96,23 @@ def get_pick_history_for_category(category):
     return history
 
 def get_todays_pick_for_category(category):
-    history = get_pick_history_for_category(category)
-    if not history: return None
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor()
     today_str = datetime.now().strftime('%Y-%m-%d')
-    for pick in history:
-        if pick['date'] == today_str:
-            return pick
-    return None
+    sql = "SELECT id, pick_date, ticker, sentiment_score FROM daily_picks_history WHERE category = %s AND pick_date = %s"
+    pick = None
+    try:
+        cursor.execute(sql, (category, today_str))
+        row = cursor.fetchone()
+        if row:
+            pick = {'id': row[0], 'date': row[1].strftime('%Y-%m-%d'), 'ticker': row[2], 'sentiment_score': row[3]}
+    except mysql.connector.Error as err:
+        print(f"Error getting today's pick: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+    return pick
 
 def get_recently_picked_tickers(category, days=365):
     conn = get_db_connection()
