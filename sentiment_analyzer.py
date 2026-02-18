@@ -4,7 +4,7 @@ import requests
 from collections import defaultdict
 
 load_dotenv()
-from database import get_portfolio_holdings, set_sell_flag
+from database import get_portfolio_holdings, set_sell_flag, set_sell_flags_batch
 
 # --- Configuration ---
 MARKETAUX_API_KEY = os.environ.get('MARKETAUX_API_KEY', 'YOUR_DEFAULT_KEY_HERE')
@@ -79,19 +79,24 @@ def run_sentiment_analysis():
     ticker_sentiments = get_sentiment_for_tickers(tickers_to_check)
 
     print("\n--- Setting Flags based on new sentiment data ---")
+    tickers_to_flag = []
+    tickers_to_unflag = []
+
     for ticker in tickers_to_check:
         average_sentiment = ticker_sentiments.get(ticker)
 
         if average_sentiment is None:
             # No news, reset flag
-            set_sell_flag(ticker, False)
+            tickers_to_unflag.append(ticker)
             continue
 
         if average_sentiment < SENTIMENT_THRESHOLD:
             print(f"  -> FLAG SET: {ticker} sentiment ({average_sentiment:.4f}) is below threshold ({SENTIMENT_THRESHOLD})")
-            set_sell_flag(ticker, True)
+            tickers_to_flag.append(ticker)
         else:
-            set_sell_flag(ticker, False)
+            tickers_to_unflag.append(ticker)
+
+    set_sell_flags_batch(tickers_to_flag, tickers_to_unflag)
 
     print("\n--- Sentiment Analysis Pipeline Finished ---")
 
