@@ -27,24 +27,30 @@ def scrape_sp500_tickers():
         print(f"Could not scrape S&P 500 list: {e}")
         return set()
 
-def update_stock_details(ticker, market_cap, sector, is_sp500):
-    """Updates a single stock's details in the database."""
+def update_stock_details_batch(updates):
+    """
+    Updates multiple stocks' details in the database.
+    updates: list of tuples (ticker, market_cap, sector, is_sp500)
+    """
     conn = get_db_connection()
     if not conn: return
     cursor = conn.cursor()
     try:
-        # Check if a row for this ticker already exists, if not, this will fail gracefully.
-        # A better approach would be to INSERT...ON DUPLICATE KEY UPDATE if the primary key was just the ticker.
-        # Given the composite key, a simple UPDATE is safer.
         sql = """
             UPDATE stocks
             SET market_cap = %s, sector = %s, is_sp500 = %s
             WHERE ticker = %s
         """
-        cursor.execute(sql, (market_cap, sector, 1 if is_sp500 else 0, ticker))
+        # Prepare data: (market_cap, sector, is_sp500_int, ticker)
+        data = [
+            (u[1], u[2], 1 if u[3] else 0, u[0])
+            for u in updates
+        ]
+        cursor.executemany(sql, data)
         conn.commit()
+        print(f"  -> Batch updated {len(updates)} tickers.")
     except Exception as e:
-        print(f"Error updating details for {ticker}: {e}")
+        print(f"Error updating batch: {e}")
         conn.rollback()
     finally:
         cursor.close()
@@ -67,6 +73,8 @@ def run_enrichment():
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
+    updates_buffer = []
+    BATCH_SIZE = 10
 
     for ticker in all_db_tickers:
         try:
@@ -78,10 +86,14 @@ def run_enrichment():
             is_sp500 = ticker in sp500_tickers
 
             if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
+                updates_buffer.append((ticker, market_cap, sector, is_sp500))
                 enriched_count += 1
             else:
                 print(f"  -> No new info found for {ticker}.")
+
+            if len(updates_buffer) >= BATCH_SIZE:
+                update_stock_details_batch(updates_buffer)
+                updates_buffer = []
 
             # Add a delay to avoid rate limiting
             time.sleep(2)
@@ -90,6 +102,9 @@ def run_enrichment():
             print(f"  -> Error processing {ticker}: {e}")
             # Also sleep on error to avoid hammering the API
             time.sleep(2)
+
+    if updates_buffer:
+        update_stock_details_batch(updates_buffer)
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
