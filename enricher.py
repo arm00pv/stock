@@ -50,6 +50,33 @@ def update_stock_details(ticker, market_cap, sector, is_sp500):
         cursor.close()
         conn.close()
 
+def update_stock_details_batch(updates):
+    """
+    Updates multiple stocks' details in the database in a single transaction.
+    updates: list of tuples (market_cap, sector, is_sp500, ticker)
+    """
+    if not updates:
+        return
+
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = """
+            UPDATE stocks
+            SET market_cap = %s, sector = %s, is_sp500 = %s
+            WHERE ticker = %s
+        """
+        cursor.executemany(sql, updates)
+        conn.commit()
+        print(f"Successfully batch updated {len(updates)} stocks.")
+    except Exception as e:
+        print(f"Error during batch update: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
 def run_enrichment():
     """
     Goes through all securities in the 'stocks' table and enriches them
@@ -67,6 +94,8 @@ def run_enrichment():
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
+    updates_buffer = []
+    BATCH_SIZE = 10
 
     for ticker in all_db_tickers:
         try:
@@ -78,8 +107,13 @@ def run_enrichment():
             is_sp500 = ticker in sp500_tickers
 
             if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
+                # Add to buffer instead of updating immediately
+                updates_buffer.append((market_cap, sector, 1 if is_sp500 else 0, ticker))
                 enriched_count += 1
+
+                if len(updates_buffer) >= BATCH_SIZE:
+                    update_stock_details_batch(updates_buffer)
+                    updates_buffer = []
             else:
                 print(f"  -> No new info found for {ticker}.")
 
@@ -90,6 +124,10 @@ def run_enrichment():
             print(f"  -> Error processing {ticker}: {e}")
             # Also sleep on error to avoid hammering the API
             time.sleep(2)
+
+    # Process any remaining updates
+    if updates_buffer:
+        update_stock_details_batch(updates_buffer)
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 
