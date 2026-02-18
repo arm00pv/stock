@@ -1,6 +1,6 @@
 import yfinance as yf
 from datetime import datetime, timedelta
-from database import get_untracked_picks, add_performance_record
+from database import get_untracked_picks, add_performance_record, add_performance_records_batch
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,6 +35,7 @@ def run_performance_check():
     print(f"Found {len(picks_to_check)} picks that need performance tracking.")
 
     today = datetime.now().date()
+    performance_records = []
 
     for pick in picks_to_check:
         pick_id = pick['id']
@@ -55,9 +56,13 @@ def run_performance_check():
 
                 if performance is not None:
                     print(f"  -> Tracking {ticker}: {days}-day performance is {performance:.2f}%")
-                    add_performance_record(pick_id, days, performance)
+                    performance_records.append((pick_id, days, performance))
                 else:
                     print(f"  -> Failed to track {ticker} for {days}-day interval.")
+
+    if performance_records:
+        print(f"Batch inserting {len(performance_records)} performance records...")
+        add_performance_records_batch(performance_records)
 
     print("--- Performance Tracking Pipeline Finished ---")
 
