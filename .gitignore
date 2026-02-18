@@ -9,3 +9,6 @@ config.py
 *.db
 *.sqlite
 *.sqlite3
+
+# Cache
+sp500_cache.json

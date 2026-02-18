@@ -4,6 +4,9 @@ import time
 from database import get_tickers_by_category, get_db_connection
 from dotenv import load_dotenv
 import requests
+import json
+import os
+from io import StringIO
 
 load_dotenv()
 
@@ -11,17 +14,44 @@ def scrape_sp500_tickers():
     """
     Scrapes the Wikipedia page for the list of S&P 500 companies.
     Returns a set of ticker symbols.
+    Caches the list in a local JSON file to avoid repeated scraping.
     """
+    cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sp500_cache.json')
+    cache_duration = 86400  # 24 hours
+
+    # Check for valid cache
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r') as f:
+                data = json.load(f)
+                timestamp = data.get('timestamp', 0)
+                if time.time() - timestamp < cache_duration:
+                    print("Loading S&P 500 tickers from cache...")
+                    return set(data.get('tickers', []))
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error reading cache file: {e}")
+
     print("Scraping Wikipedia for S&P 500 component list...")
     try:
         url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
         response.raise_for_status()
-        tables = pd.read_html(response.text)
+        tables = pd.read_html(StringIO(response.text))
         sp500_table = tables[0]
         tickers = set(sp500_table['Symbol'].tolist())
         print(f"Successfully scraped {len(tickers)} S&P 500 tickers.")
+
+        # Save to cache
+        try:
+            with open(cache_file, 'w') as f:
+                json.dump({
+                    'timestamp': time.time(),
+                    'tickers': list(tickers)
+                }, f)
+        except IOError as e:
+            print(f"Could not write to cache file: {e}")
+
         return tickers
     except Exception as e:
         print(f"Could not scrape S&P 500 list: {e}")
