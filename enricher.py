@@ -1,7 +1,8 @@
 import pandas as pd
 import yfinance as yf
 import time
-from database import get_tickers_by_category, get_db_connection
+import concurrent.futures
+from database import get_tickers_by_category, get_db_connection, update_stock_details_batch
 from dotenv import load_dotenv
 import requests
 
@@ -27,28 +28,27 @@ def scrape_sp500_tickers():
         print(f"Could not scrape S&P 500 list: {e}")
         return set()
 
-def update_stock_details(ticker, market_cap, sector, is_sp500):
-    """Updates a single stock's details in the database."""
-    conn = get_db_connection()
-    if not conn: return
-    cursor = conn.cursor()
+def fetch_ticker_data(ticker, sp500_tickers):
+    """
+    Fetches stock info from yfinance for a single ticker.
+    Returns a tuple (market_cap, sector, is_sp500, ticker) if successful, else None.
+    """
     try:
-        # Check if a row for this ticker already exists, if not, this will fail gracefully.
-        # A better approach would be to INSERT...ON DUPLICATE KEY UPDATE if the primary key was just the ticker.
-        # Given the composite key, a simple UPDATE is safer.
-        sql = """
-            UPDATE stocks
-            SET market_cap = %s, sector = %s, is_sp500 = %s
-            WHERE ticker = %s
-        """
-        cursor.execute(sql, (market_cap, sector, 1 if is_sp500 else 0, ticker))
-        conn.commit()
+        print(f"Enriching {ticker}...")
+        stock_info = yf.Ticker(ticker).info
+
+        market_cap = stock_info.get('marketCap')
+        sector = stock_info.get('sector')
+        is_sp500 = 1 if ticker in sp500_tickers else 0
+
+        if market_cap or sector or is_sp500:
+             return (market_cap, sector, is_sp500, ticker)
+        else:
+            print(f"  -> No new info found for {ticker}.")
+            return None
     except Exception as e:
-        print(f"Error updating details for {ticker}: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+        print(f"  -> Error processing {ticker}: {e}")
+        return None
 
 def run_enrichment():
     """
@@ -67,29 +67,29 @@ def run_enrichment():
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
+    batch_updates = []
+    BATCH_SIZE = 50
 
-    for ticker in all_db_tickers:
-        try:
-            print(f"Enriching {ticker}...")
-            stock_info = yf.Ticker(ticker).info
+    # Using ThreadPoolExecutor to parallelize fetches
+    # max_workers=5 is chosen to respect rate limits while providing significant speedup
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_ticker = {executor.submit(fetch_ticker_data, ticker, sp500_tickers): ticker for ticker in all_db_tickers}
 
-            market_cap = stock_info.get('marketCap')
-            sector = stock_info.get('sector')
-            is_sp500 = ticker in sp500_tickers
-
-            if market_cap or sector or is_sp500:
-                update_stock_details(ticker, market_cap, sector, is_sp500)
+        for future in concurrent.futures.as_completed(future_to_ticker):
+            result = future.result()
+            if result:
+                batch_updates.append(result)
                 enriched_count += 1
-            else:
-                print(f"  -> No new info found for {ticker}.")
 
-            # Add a delay to avoid rate limiting
-            time.sleep(2)
+            if len(batch_updates) >= BATCH_SIZE:
+                print(f"Flushing batch of {len(batch_updates)} updates...")
+                update_stock_details_batch(batch_updates)
+                batch_updates = []
 
-        except Exception as e:
-            print(f"  -> Error processing {ticker}: {e}")
-            # Also sleep on error to avoid hammering the API
-            time.sleep(2)
+    # Flush remaining
+    if batch_updates:
+        print(f"Flushing final batch of {len(batch_updates)} updates...")
+        update_stock_details_batch(batch_updates)
 
     print(f"--- Data Enrichment Pipeline Finished. Enriched {enriched_count} tickers. ---")
 

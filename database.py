@@ -289,3 +289,26 @@ def add_performance_record(pick_id, days_after, performance):
     finally:
         cursor.close()
         conn.close()
+
+def update_stock_details_batch(updates):
+    """
+    Updates multiple stocks' details in the database in a batch.
+    updates: list of tuples (market_cap, sector, is_sp500, ticker)
+    """
+    conn = get_db_connection()
+    if not conn: return
+    cursor = conn.cursor()
+    try:
+        sql = """
+            UPDATE stocks
+            SET market_cap = %s, sector = %s, is_sp500 = %s
+            WHERE ticker = %s
+        """
+        cursor.executemany(sql, updates)
+        conn.commit()
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"Database error during batch update: {e}")
+    finally:
+        cursor.close()
+        conn.close()
