@@ -131,6 +131,25 @@ def get_tickers_by_category(category):
     conn.close()
     return tickers
 
+def get_tickers_by_categories(categories):
+    if not categories:
+        return []
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    placeholders = ', '.join(['%s'] * len(categories))
+    query = f'SELECT DISTINCT ticker FROM stocks WHERE category IN ({placeholders})'
+    try:
+        cursor.execute(query, tuple(categories))
+        tickers = [item[0] for item in cursor.fetchall()]
+    except mysql.connector.Error as err:
+        print(f"Error getting tickers by categories: {err}")
+        tickers = []
+    finally:
+        cursor.close()
+        conn.close()
+    return tickers
+
 def replace_tickers_for_category(tickers, category):
     conn = get_db_connection()
     if not conn: return

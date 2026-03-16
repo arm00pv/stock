@@ -1,7 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import time
-from database import get_tickers_by_category, get_db_connection
+from database import get_tickers_by_categories, get_db_connection
 from dotenv import load_dotenv
 import requests
 
@@ -60,10 +60,8 @@ def run_enrichment():
     sp500_tickers = scrape_sp500_tickers()
 
     print("Fetching all existing tickers from database...")
-    all_db_tickers = set()
     categories = ['sp500', 'penny', 'monthly_dividend', 'high_yield', 'etf', 'generic_stock', 'bond']
-    for category in categories:
-        all_db_tickers.update(get_tickers_by_category(category))
+    all_db_tickers = set(get_tickers_by_categories(categories))
 
     print(f"Found {len(all_db_tickers)} total unique tickers to enrich.")
     enriched_count = 0
